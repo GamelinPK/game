@@ -14,6 +14,7 @@
         input[type="text"] { width: 60%; padding: 12px; border-radius: 5px; border: 1px solid #555; background: #222; color: white; font-size: 18px; text-align: center; text-transform: uppercase; margin-bottom: 15px; }
         button { background: #ff4757; color: white; border: none; padding: 12px 25px; font-size: 16px; font-weight: bold; border-radius: 5px; cursor: pointer; transition: background 0.2s; margin: 5px; }
         button:hover { background: #ff6b81; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
         .btn-secondary { background: #3742fa; }
         .btn-secondary:hover { background: #535cfa; }
         .arena { display: flex; justify-content: space-between; margin: 20px 0; align-items: flex-start; }
@@ -99,6 +100,7 @@
             
             <div id="game-over-container" style="display: none; margin-top: 20px;">
                 <h2 id="game-over-text" style="color: #feca57;"></h2>
+                <button id="rematch-btn" onclick="requestRematch()">Request Rematch</button>
                 <button onclick="location.reload()">Back to Menu</button>
             </div>
         </div>
@@ -111,7 +113,6 @@
         let myKey = null; 
         const MAX_HP = 100;
 
-        // Visual strings updated to match server buffs
         const cards = {
             'strike': { name: 'Strike', icon: '🗡️', desc: 'Deal 15 DMG.', color: '#ff4757' },
             'heal': { name: 'Bandage', icon: '💚', desc: 'Restore 18 HP.', color: '#2ed573' },
@@ -120,12 +121,11 @@
             'shield': { name: 'Iron Wall', icon: '🛡️', desc: 'Gain 15 Armor.', color: '#3742fa' },
             'poison': { name: 'Poison Flask', icon: '🧪', desc: 'Deal 5 DMG. Apply 5 Poison.', color: '#2ecc71' },
             'execute': { name: 'Execute', icon: '☠️', desc: 'Deal 35 DMG if enemy HP < 40, else 8 DMG.', color: '#2f3542' },
-            'shatter': { name: 'Shatter', icon: '🔨', desc: 'Deal 35 DMG if enemy has Armor, else 5 DMG.', color: '#f39c12' },
-            'pierce': { name: 'Piercing Lunge', icon: '🤺', desc: 'Deal 25 DMG if enemy has Armor, else 4 DMG.', color: '#747d8c' },
+            'shatter': { name: 'Shatter', icon: '🔨', desc: 'Deal 15 DMG. Ignores Armor.', color: '#f39c12' },
+            'pierce': { name: 'Piercing Lunge', icon: '🤺', desc: 'Deal 10 DMG. Ignores Armor. Draw 1 card.', color: '#747d8c' },
             'reckless': { name: 'Reckless Swing', icon: '🎲', desc: '50% chance for 30 DMG, 50% for 0.', color: '#e67e22' },
             'regen': { name: 'Regrowth', icon: '🌱', desc: 'Heal 5 HP. Gain 5 Regen.', color: '#1abc9c' },
             'sacrifice': { name: 'Blood Pact', icon: '🩸', desc: 'Lose 15 HP. Deal 30 DMG.', color: '#c0392b' },
-            
             'quick_strike': { name: 'Quick Strike', icon: '⚡', desc: 'Deal 8 DMG. Draw 1 card.', color: '#f1c40f' },
             'preparation': { name: 'Preparation', icon: '🎒', desc: 'Gain 10 Armor. Draw 2 cards.', color: '#95a5a6' },
             'double_strike': { name: 'Double Strike', icon: '⚔️', desc: 'Deal 8 DMG twice.', color: '#e74c3c' },
@@ -154,6 +154,10 @@
             if(confirm("Discard your hand and draw 5 new cards? (You can only do this once!)")) {
                 socket.emit('mulligan', currentRoom);
             }
+        }
+        
+        function requestRematch() {
+            socket.emit('request_rematch', currentRoom);
         }
 
         socket.on('room_created', (roomId) => {
@@ -187,11 +191,9 @@
             updateStats('my', state[state.me]);
             updateStats('opp', state[state.opponent]);
             
-            // Show hand sizes
             document.getElementById('my-hand-count').innerText = `Cards in Hand: ${state.myHand.length}`;
             document.getElementById('opp-hand-count').innerText = `Cards in Hand: ${state.oppHandCount}`;
 
-            // Show/Hide Mulligan button
             if (isMyTurn && !state.hasMulliganed && !state.gameOver) {
                 document.getElementById('mulligan-btn').style.display = 'inline-block';
             } else {
@@ -208,7 +210,17 @@
                 else if (state.winner === 'Player 2' && myKey === 'p2') winnerText = "You Win!";
                 else if (state.winner !== 'Draw') winnerText = "You Lost!";
                 document.getElementById('game-over-text').innerText = winnerText;
+                
+                const rematchBtn = document.getElementById('rematch-btn');
+                if (state.myRematch) {
+                    rematchBtn.innerText = "Waiting for opponent...";
+                    rematchBtn.disabled = true;
+                } else {
+                    rematchBtn.innerText = "Request Rematch";
+                    rematchBtn.disabled = false;
+                }
             } else {
+                document.getElementById('game-over-container').style.display = 'none';
                 state.myHand.forEach((cardId, index) => {
                     const card = cards[cardId];
                     const cardEl = document.createElement('div');

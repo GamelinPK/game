@@ -12,9 +12,9 @@ app.use(express.static(path.join(__dirname, 'public')));
 const MAX_HP = 100;
 
 // Helper Functions
-function attack(actor, target, amount, room) {
+function attack(actor, target, amount, room, ignoreArmor = false) {
     let dmg = amount;
-    if (target.armor > 0) {
+    if (!ignoreArmor && target.armor > 0) {
         if (target.armor >= dmg) {
             target.armor -= dmg;
             logAction(`🛡️ ${target.name}'s Armor absorbed ${dmg} DMG.`, room, target.id);
@@ -25,9 +25,16 @@ function attack(actor, target, amount, room) {
             target.armor = 0;
         }
     }
+    
     target.hp -= dmg;
-    logAction(`⚔️ ${actor.name} dealt ${dmg} DMG to ${target.name}.`, room, actor.id);
+    
+    if (ignoreArmor) {
+        logAction(`🗡️ ${actor.name} PIERCED armor and dealt ${dmg} DMG to ${target.name}!`, room, actor.id);
+    } else {
+        logAction(`⚔️ ${actor.name} dealt ${dmg} DMG to ${target.name}.`, room, actor.id);
+    }
 }
+
 function heal(target, amount, room) {
     const actualHeal = Math.min(amount, MAX_HP - target.hp);
     target.hp += actualHeal;
@@ -58,7 +65,7 @@ function logAction(msg, room, actorId = 'sys') {
     if (room.logs.length > 8) room.logs.shift();
 }
 
-// Card Database (Armor-counters updated to Pierce mechanics!)
+// Card Database (Pierce mechanic ignores armor now)
 const cards = {
     'strike': { name: 'Strike', icon: '🗡️', desc: 'Deal 15 DMG.', color: '#ff4757', action: (a, t, room) => attack(a, t, 15, room) },
     'heal': { name: 'Bandage', icon: '💚', desc: 'Restore 18 HP.', color: '#2ed573', action: (a, t, room) => heal(a, 18, room) },
@@ -68,9 +75,8 @@ const cards = {
     'poison': { name: 'Poison Flask', icon: '🧪', desc: 'Deal 5 DMG. Apply 5 Poison.', color: '#2ecc71', action: (a, t, room) => { attack(a, t, 5, room); addStatus(t, 'poison', 5, room); } },
     'execute': { name: 'Execute', icon: '☠️', desc: 'Deal 35 DMG if enemy HP < 40, else 8 DMG.', color: '#2f3542', action: (a, t, room) => { if(t.hp < 40) attack(a, t, 35, room); else attack(a, t, 8, room); } },
     
-    // Updated Pierce Cards
-    'shatter': { name: 'Shatter', icon: '🔨', desc: 'Deal 35 DMG if enemy has Armor, else 5 DMG.', color: '#f39c12', action: (a, t, room) => { if(t.armor > 0) { logAction(`💥 ${a.name} exploited ${t.name}'s Armor!`, room, a.id); attack(a, t, 35, room); } else { attack(a, t, 5, room); } } },
-    'pierce': { name: 'Piercing Lunge', icon: '🤺', desc: 'Deal 25 DMG if enemy has Armor, else 4 DMG.', color: '#747d8c', action: (a, t, room) => { if(t.armor > 0) attack(a, t, 25, room); else attack(a, t, 4, room); } },
+    'shatter': { name: 'Shatter', icon: '🔨', desc: 'Deal 15 DMG. Ignores Armor.', color: '#f39c12', action: (a, t, room) => attack(a, t, 15, room, true) },
+    'pierce': { name: 'Piercing Lunge', icon: '🤺', desc: 'Deal 10 DMG. Ignores Armor. Draw 1 card.', color: '#747d8c', action: (a, t, room) => { attack(a, t, 10, room, true); drawCards(a, 1, room); } },
     
     'reckless': { name: 'Reckless Swing', icon: '🎲', desc: '50% chance for 30 DMG, 50% for 0.', color: '#e67e22', action: (a, t, room) => { if(Math.random() > 0.5) attack(a, t, 30, room); else logAction(`💨 ${a.name} swung wildly and missed!`, room, a.id); } },
     'regen': { name: 'Regrowth', icon: '🌱', desc: 'Heal 5 HP. Gain 5 Regen.', color: '#1abc9c', action: (a, t, room) => { heal(a, 5, room); addStatus(a, 'regen', 5, room); } },
@@ -98,7 +104,6 @@ function getRandomHand(size = 5) {
     return hand;
 }
 
-// Game Logic
 function checkGameOver(room) {
     if (room.p1.hp <= 0 && room.p2.hp <= 0) { room.gameOver = true; room.winner = "Draw"; }
     else if (room.p1.hp <= 0) { room.gameOver = true; room.winner = "Player 2"; }
@@ -125,14 +130,16 @@ function broadcastState(roomId) {
     
     const p2HandCount = room.p2 ? room.p2.hand.length : 0;
     const p1HandCount = room.p1 ? room.p1.hand.length : 0;
+    
+    const p1Rematch = room.rematchRequests ? !!room.rematchRequests[room.p1.id] : false;
+    const p2Rematch = (room.p2 && room.rematchRequests) ? !!room.rematchRequests[room.p2.id] : false;
 
-    io.to(room.p1.id).emit('game_state', { ...room, me: 'p1', opponent: 'p2', myHand: room.p1.hand, oppHandCount: p2HandCount, hasMulliganed: room.p1.hasMulliganed });
+    io.to(room.p1.id).emit('game_state', { ...room, me: 'p1', opponent: 'p2', myHand: room.p1.hand, oppHandCount: p2HandCount, hasMulliganed: room.p1.hasMulliganed, myRematch: p1Rematch });
     if(room.p2) {
-        io.to(room.p2.id).emit('game_state', { ...room, me: 'p2', opponent: 'p1', myHand: room.p2.hand, oppHandCount: p1HandCount, hasMulliganed: room.p2.hasMulliganed });
+        io.to(room.p2.id).emit('game_state', { ...room, me: 'p2', opponent: 'p1', myHand: room.p2.hand, oppHandCount: p1HandCount, hasMulliganed: room.p2.hasMulliganed, myRematch: p2Rematch });
     }
 }
 
-// Socket Connections
 io.on('connection', (socket) => {
     
     socket.on('create_room', () => {
@@ -144,7 +151,8 @@ io.on('connection', (socket) => {
             turn: 'p1',
             logs: [{ text: "Room created. Waiting for opponent...", actor: "sys" }],
             gameOver: false,
-            winner: null
+            winner: null,
+            rematchRequests: {}
         };
         socket.join(roomId);
         socket.emit('room_created', roomId);
@@ -164,7 +172,6 @@ io.on('connection', (socket) => {
         }
     });
 
-    // Handle Mulligan Request
     socket.on('mulligan', (roomId) => {
         const room = rooms[roomId];
         if (!room || room.gameOver) return;
@@ -180,6 +187,30 @@ io.on('connection', (socket) => {
         actor.hasMulliganed = true;
         
         logAction(`🔄 ${actor.name} discarded their hand and Mulliganed!`, room, actorKey);
+        broadcastState(roomId);
+    });
+    
+    socket.on('request_rematch', (roomId) => {
+        const room = rooms[roomId];
+        if (!room || !room.gameOver) return;
+
+        room.rematchRequests = room.rematchRequests || {};
+        room.rematchRequests[socket.id] = true;
+
+        const isP1 = room.p1.id === socket.id;
+        const actorName = isP1 ? room.p1.name : room.p2.name;
+        logAction(`🔄 ${actorName} wants a rematch...`, room, 'sys');
+        
+        if (room.rematchRequests[room.p1.id] && room.rematchRequests[room.p2.id]) {
+            room.p1 = { ...room.p1, hp: MAX_HP, armor: 0, poison: 0, regen: 0, hand: getRandomHand(5), hasMulliganed: false };
+            room.p2 = { ...room.p2, hp: MAX_HP, armor: 0, poison: 0, regen: 0, hand: getRandomHand(5), hasMulliganed: false };
+            room.turn = 'p1';
+            room.gameOver = false;
+            room.winner = null;
+            room.rematchRequests = {};
+            room.logs = [{ text: "Rematch started! Player 1 goes first.", actor: "sys" }];
+        }
+        
         broadcastState(roomId);
     });
 
