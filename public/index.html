@@ -40,6 +40,10 @@
         .card-title { font-weight: bold; font-size: 14px; margin-bottom: 5px; }
         .card-desc { font-size: 11px; color: #ccc; }
         .room-code-display { font-size: 32px; letter-spacing: 5px; color: #7bed9f; font-family: monospace; background: #222; padding: 10px; border-radius: 8px; display: inline-block; margin: 10px 0; }
+        
+        .hand-header { display: flex; justify-content: center; align-items: center; gap: 15px; margin-bottom: 10px; }
+        .mulligan-btn { background: #e67e22; padding: 6px 12px; font-size: 12px; margin: 0; }
+        .mulligan-btn:hover { background: #d35400; }
     </style>
 </head>
 <body>
@@ -87,7 +91,10 @@
 
             <div class="log" id="battle-log"></div>
 
-            <h3 style="margin-bottom: 10px;">Your Hand</h3>
+            <div class="hand-header">
+                <h3 style="margin: 0;">Your Hand</h3>
+                <button id="mulligan-btn" class="mulligan-btn" style="display: none;" onclick="useMulligan()">🔄 Mulligan</button>
+            </div>
             <div class="hand" id="player-hand"></div>
             
             <div id="game-over-container" style="display: none; margin-top: 20px;">
@@ -104,12 +111,13 @@
         let myKey = null; 
         const MAX_HP = 100;
 
+        // Visual strings updated to match server buffs
         const cards = {
             'strike': { name: 'Strike', icon: '🗡️', desc: 'Deal 15 DMG.', color: '#ff4757' },
             'heal': { name: 'Bandage', icon: '💚', desc: 'Restore 18 HP.', color: '#2ed573' },
             'fireball': { name: 'Fireball', icon: '🔥', desc: 'Deal 25 DMG. You take 5 DMG.', color: '#ff6348' },
             'vampire': { name: 'Vampiric Bite', icon: '🦇', desc: 'Deal 10 DMG. Heal 10 HP.', color: '#a55eea' },
-            'shield': { name: 'Iron Wall', icon: '🛡️', desc: 'Gain 10 Armor.', color: '#3742fa' },
+            'shield': { name: 'Iron Wall', icon: '🛡️', desc: 'Gain 15 Armor.', color: '#3742fa' },
             'poison': { name: 'Poison Flask', icon: '🧪', desc: 'Deal 5 DMG. Apply 5 Poison.', color: '#2ecc71' },
             'execute': { name: 'Execute', icon: '☠️', desc: 'Deal 35 DMG if enemy HP < 40, else 8 DMG.', color: '#2f3542' },
             'shatter': { name: 'Shatter', icon: '🔨', desc: 'Destroy enemy Armor. Deal 10 DMG.', color: '#f39c12' },
@@ -119,12 +127,12 @@
             'sacrifice': { name: 'Blood Pact', icon: '🩸', desc: 'Lose 15 HP. Deal 30 DMG.', color: '#c0392b' },
             
             'quick_strike': { name: 'Quick Strike', icon: '⚡', desc: 'Deal 8 DMG. Draw 1 card.', color: '#f1c40f' },
-            'preparation': { name: 'Preparation', icon: '🎒', desc: 'Gain 5 Armor. Draw 2 cards.', color: '#95a5a6' },
+            'preparation': { name: 'Preparation', icon: '🎒', desc: 'Gain 10 Armor. Draw 2 cards.', color: '#95a5a6' },
             'double_strike': { name: 'Double Strike', icon: '⚔️', desc: 'Deal 8 DMG twice.', color: '#e74c3c' },
             'leech_seed': { name: 'Leech Seed', icon: '🌰', desc: 'Apply 3 Poison. Gain 3 Regen.', color: '#27ae60' },
             'cursed_blade': { name: 'Cursed Blade', icon: '🗡️', desc: 'Deal 22 DMG. You gain 3 Poison.', color: '#8e44ad' },
             'fortify': { name: 'Fortify', icon: '🏰', desc: 'Double your current Armor.', color: '#2980b9' },
-            'panic': { name: 'Panic Button', icon: '🚨', desc: 'If HP < 30, gain 25 Armor. Else, gain 5.', color: '#c0392b' },
+            'panic': { name: 'Panic Button', icon: '🚨', desc: 'If HP < 40, gain 40 Armor. Else, gain 12.', color: '#c0392b' },
             'venom_bite': { name: 'Venom Bite', icon: '🐍', desc: 'Deal 10 DMG. If target has Poison, deal +15 DMG.', color: '#16a085' },
             'meditate': { name: 'Meditate', icon: '🧘', desc: 'Heal 15 HP. Draw 1 card.', color: '#3498db' },
             'overclock': { name: 'Overclock', icon: '⚙️', desc: 'Lose 10 HP. Draw 3 cards.', color: '#d35400' }
@@ -141,6 +149,12 @@
             if(code.length > 0) socket.emit('join_room', code);
         }
         function playCard(index) { socket.emit('play_card', { roomId: currentRoom, cardIndex: index }); }
+        
+        function useMulligan() {
+            if(confirm("Discard your hand and draw 5 new cards? (You can only do this once!)")) {
+                socket.emit('mulligan', currentRoom);
+            }
+        }
 
         socket.on('room_created', (roomId) => {
             currentRoom = roomId;
@@ -176,6 +190,13 @@
             // Show hand sizes
             document.getElementById('my-hand-count').innerText = `Cards in Hand: ${state.myHand.length}`;
             document.getElementById('opp-hand-count').innerText = `Cards in Hand: ${state.oppHandCount}`;
+
+            // Show/Hide Mulligan button
+            if (isMyTurn && !state.hasMulliganed && !state.gameOver) {
+                document.getElementById('mulligan-btn').style.display = 'inline-block';
+            } else {
+                document.getElementById('mulligan-btn').style.display = 'none';
+            }
 
             const handDiv = document.getElementById('player-hand');
             handDiv.innerHTML = '';
