@@ -58,7 +58,7 @@ function logAction(msg, room, actorId = 'sys') {
     if (room.logs.length > 8) room.logs.shift();
 }
 
-// Card Database (Armor cards buffed!)
+// Card Database (Armor-counters updated to Pierce mechanics!)
 const cards = {
     'strike': { name: 'Strike', icon: '🗡️', desc: 'Deal 15 DMG.', color: '#ff4757', action: (a, t, room) => attack(a, t, 15, room) },
     'heal': { name: 'Bandage', icon: '💚', desc: 'Restore 18 HP.', color: '#2ed573', action: (a, t, room) => heal(a, 18, room) },
@@ -67,10 +67,13 @@ const cards = {
     'shield': { name: 'Iron Wall', icon: '🛡️', desc: 'Gain 15 Armor.', color: '#3742fa', action: (a, t, room) => addArmor(a, 15, room) },
     'poison': { name: 'Poison Flask', icon: '🧪', desc: 'Deal 5 DMG. Apply 5 Poison.', color: '#2ecc71', action: (a, t, room) => { attack(a, t, 5, room); addStatus(t, 'poison', 5, room); } },
     'execute': { name: 'Execute', icon: '☠️', desc: 'Deal 35 DMG if enemy HP < 40, else 8 DMG.', color: '#2f3542', action: (a, t, room) => { if(t.hp < 40) attack(a, t, 35, room); else attack(a, t, 8, room); } },
-    'shatter': { name: 'Shatter', icon: '🔨', desc: 'Destroy enemy Armor. Deal 10 DMG.', color: '#f39c12', action: (a, t, room) => { if(t.armor > 0) logAction(`💥 ${a.name} shattered ${t.name}'s Armor!`, room, a.id); t.armor = 0; attack(a, t, 10, room); } },
+    
+    // Updated Pierce Cards
+    'shatter': { name: 'Shatter', icon: '🔨', desc: 'Deal 35 DMG if enemy has Armor, else 5 DMG.', color: '#f39c12', action: (a, t, room) => { if(t.armor > 0) { logAction(`💥 ${a.name} exploited ${t.name}'s Armor!`, room, a.id); attack(a, t, 35, room); } else { attack(a, t, 5, room); } } },
+    'pierce': { name: 'Piercing Lunge', icon: '🤺', desc: 'Deal 25 DMG if enemy has Armor, else 4 DMG.', color: '#747d8c', action: (a, t, room) => { if(t.armor > 0) attack(a, t, 25, room); else attack(a, t, 4, room); } },
+    
     'reckless': { name: 'Reckless Swing', icon: '🎲', desc: '50% chance for 30 DMG, 50% for 0.', color: '#e67e22', action: (a, t, room) => { if(Math.random() > 0.5) attack(a, t, 30, room); else logAction(`💨 ${a.name} swung wildly and missed!`, room, a.id); } },
     'regen': { name: 'Regrowth', icon: '🌱', desc: 'Heal 5 HP. Gain 5 Regen.', color: '#1abc9c', action: (a, t, room) => { heal(a, 5, room); addStatus(a, 'regen', 5, room); } },
-    'thief': { name: 'Siphon', icon: '🧤', desc: 'Steal all enemy Armor. Deal 5 DMG.', color: '#747d8c', action: (a, t, room) => { const stolen = t.armor; t.armor = 0; addArmor(a, stolen, room); if(stolen>0) logAction(`🧤 ${a.name} stole ${stolen} Armor!`, room, a.id); attack(a, t, 5, room); } },
     'sacrifice': { name: 'Blood Pact', icon: '🩸', desc: 'Lose 15 HP. Deal 30 DMG.', color: '#c0392b', action: (a, t, room) => { directDamage(a, 15, room); attack(a, t, 30, room); } },
     'quick_strike': { name: 'Quick Strike', icon: '⚡', desc: 'Deal 8 DMG. Draw 1 card.', color: '#f1c40f', action: (a, t, room) => { attack(a, t, 8, room); drawCards(a, 1, room); } },
     'preparation': { name: 'Preparation', icon: '🎒', desc: 'Gain 10 Armor. Draw 2 cards.', color: '#95a5a6', action: (a, t, room) => { addArmor(a, 10, room); drawCards(a, 2, room); } },
@@ -170,7 +173,6 @@ io.on('connection', (socket) => {
         const actorKey = isP1 ? 'p1' : 'p2';
         const actor = room[actorKey];
 
-        // Ensure it's their turn and they haven't used it yet
         if (room.turn !== actorKey) return;
         if (actor.hasMulliganed) return;
 
