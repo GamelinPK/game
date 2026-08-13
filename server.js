@@ -9,18 +9,18 @@ const io = new Server(server);
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-const MAX_HP = 100;
+const MAX_HP = 200;
+const MAX_MANA = 5;
 
 // Helper Functions
 function attack(actor, target, amount, room, ignoreArmor = false) {
-    // Apply Weakness Multiplier (10% extra damage per stack)
     let dmg = Math.floor(amount * (1 + target.weakness * 0.1));
     
     if (!ignoreArmor && target.armor > 0) {
         if (target.armor >= dmg) {
             target.armor -= dmg;
             logAction(`🛡️ ${target.name}'s Armor absorbed ${dmg} DMG.`, room, target.id);
-            target.weakness += 1; // Still apply weakness even if fully blocked
+            target.weakness += 1;
             return;
         } else {
             dmg -= target.armor;
@@ -37,7 +37,6 @@ function attack(actor, target, amount, room, ignoreArmor = false) {
         logAction(`⚔️ ${actor.name} dealt ${dmg} DMG to ${target.name}.`, room, actor.id);
     }
     
-    // Apply Weakness after the attack connects
     target.weakness += 1;
 }
 
@@ -57,7 +56,7 @@ function addArmor(target, amount, room) {
 }
 function addStatus(target, type, amount, room) {
     target[type] += amount;
-    const emoji = type === 'poison' ? '🧪' : '🌱';
+    const emoji = type === 'poison' ? '🧪' : type === 'weakness' ? '🎯' : '🌱';
     logAction(`${emoji} ${target.name} gained ${amount} ${type.charAt(0).toUpperCase() + type.slice(1)}.`, room, target.id);
 }
 function drawCards(actor, count, room) {
@@ -66,35 +65,49 @@ function drawCards(actor, count, room) {
     }
     logAction(`🃏 ${actor.name} drew ${count} card(s).`, room, actor.id);
 }
+function gainMana(actor, amount, room) {
+    actor.mana += amount;
+    logAction(`⚡ ${actor.name} gained ${amount} Mana.`, room, actor.id);
+}
 function logAction(msg, room, actorId = 'sys') {
     room.logs.push({ text: msg, actor: actorId });
     if (room.logs.length > 8) room.logs.shift();
 }
 
-// Card Database
+// Card Database with Mana Costs
 const cards = {
-    'strike': { name: 'Strike', icon: '🗡️', desc: 'Deal 15 DMG.', color: '#ff4757', action: (a, t, room) => attack(a, t, 15, room) },
-    'heal': { name: 'Bandage', icon: '💚', desc: 'Restore 18 HP.', color: '#2ed573', action: (a, t, room) => heal(a, 18, room) },
-    'fireball': { name: 'Fireball', icon: '🔥', desc: 'Deal 25 DMG. You take 5 DMG.', color: '#ff6348', action: (a, t, room) => { attack(a, t, 25, room); directDamage(a, 5, room); } },
-    'vampire': { name: 'Vampiric Bite', icon: '🦇', desc: 'Deal 10 DMG. Heal 10 HP.', color: '#a55eea', action: (a, t, room) => { attack(a, t, 10, room); heal(a, 10, room); } },
-    'shield': { name: 'Iron Wall', icon: '🛡️', desc: 'Gain 15 Armor.', color: '#3742fa', action: (a, t, room) => addArmor(a, 15, room) },
-    'poison': { name: 'Poison Flask', icon: '🧪', desc: 'Deal 5 DMG. Apply 5 Poison.', color: '#2ecc71', action: (a, t, room) => { attack(a, t, 5, room); addStatus(t, 'poison', 5, room); } },
-    'execute': { name: 'Execute', icon: '☠️', desc: 'Deal 35 DMG if enemy HP < 40, else 8 DMG.', color: '#2f3542', action: (a, t, room) => { if(t.hp < 40) attack(a, t, 35, room); else attack(a, t, 8, room); } },
-    'shatter': { name: 'Shatter', icon: '🔨', desc: 'Deal 15 DMG. Ignores Armor.', color: '#f39c12', action: (a, t, room) => attack(a, t, 15, room, true) },
-    'pierce': { name: 'Piercing Lunge', icon: '🤺', desc: 'Deal 10 DMG. Ignores Armor. Draw 1 card.', color: '#747d8c', action: (a, t, room) => { attack(a, t, 10, room, true); drawCards(a, 1, room); } },
-    'reckless': { name: 'Reckless Swing', icon: '🎲', desc: '50% chance for 30 DMG, 50% for 0.', color: '#e67e22', action: (a, t, room) => { if(Math.random() > 0.5) attack(a, t, 30, room); else logAction(`💨 ${a.name} swung wildly and missed!`, room, a.id); } },
-    'regen': { name: 'Regrowth', icon: '🌱', desc: 'Heal 5 HP. Gain 5 Regen.', color: '#1abc9c', action: (a, t, room) => { heal(a, 5, room); addStatus(a, 'regen', 5, room); } },
-    'sacrifice': { name: 'Blood Pact', icon: '🩸', desc: 'Lose 15 HP. Deal 30 DMG.', color: '#c0392b', action: (a, t, room) => { directDamage(a, 15, room); attack(a, t, 30, room); } },
-    'quick_strike': { name: 'Quick Strike', icon: '⚡', desc: 'Deal 8 DMG. Draw 1 card.', color: '#f1c40f', action: (a, t, room) => { attack(a, t, 8, room); drawCards(a, 1, room); } },
-    'preparation': { name: 'Preparation', icon: '🎒', desc: 'Gain 10 Armor. Draw 2 cards.', color: '#95a5a6', action: (a, t, room) => { addArmor(a, 10, room); drawCards(a, 2, room); } },
-    'double_strike': { name: 'Double Strike', icon: '⚔️', desc: 'Deal 8 DMG twice.', color: '#e74c3c', action: (a, t, room) => { attack(a, t, 8, room); attack(a, t, 8, room); } },
-    'leech_seed': { name: 'Leech Seed', icon: '🌰', desc: 'Apply 3 Poison. Gain 3 Regen.', color: '#27ae60', action: (a, t, room) => { addStatus(t, 'poison', 3, room); addStatus(a, 'regen', 3, room); } },
-    'cursed_blade': { name: 'Cursed Blade', icon: '🗡️', desc: 'Deal 22 DMG. You gain 3 Poison.', color: '#8e44ad', action: (a, t, room) => { attack(a, t, 22, room); addStatus(a, 'poison', 3, room); } },
-    'fortify': { name: 'Fortify', icon: '🏰', desc: 'Double your current Armor.', color: '#2980b9', action: (a, t, room) => { const amt = a.armor; addArmor(a, amt, room); } },
-    'panic': { name: 'Panic Button', icon: '🚨', desc: 'If HP < 40, gain 40 Armor. Else, gain 12.', color: '#c0392b', action: (a, t, room) => { if (a.hp < 40) addArmor(a, 40, room); else addArmor(a, 12, room); } },
-    'venom_bite': { name: 'Venom Bite', icon: '🐍', desc: 'Deal 10 DMG. If target has Poison, deal +15 DMG.', color: '#16a085', action: (a, t, room) => { if (t.poison > 0) attack(a, t, 25, room); else attack(a, t, 10, room); } },
-    'meditate': { name: 'Meditate', icon: '🧘', desc: 'Heal 15 HP. Draw 1 card.', color: '#3498db', action: (a, t, room) => { heal(a, 15, room); drawCards(a, 1, room); } },
-    'overclock': { name: 'Overclock', icon: '⚙️', desc: 'Lose 10 HP. Draw 3 cards.', color: '#d35400', action: (a, t, room) => { directDamage(a, 10, room); drawCards(a, 3, room); } }
+    // 2 Mana (Standard)
+    'strike': { name: 'Strike', cost: 2, icon: '🗡️', desc: 'Deal 15 DMG.', color: '#ff4757', action: (a, t, room) => attack(a, t, 15, room) },
+    'heal': { name: 'Bandage', cost: 2, icon: '💚', desc: 'Restore 18 HP.', color: '#2ed573', action: (a, t, room) => heal(a, 18, room) },
+    'fireball': { name: 'Fireball', cost: 2, icon: '🔥', desc: 'Deal 25 DMG. Take 5 DMG.', color: '#ff6348', action: (a, t, room) => { attack(a, t, 25, room); directDamage(a, 5, room); } },
+    'vampire': { name: 'Vampiric Bite', cost: 2, icon: '🦇', desc: 'Deal 10 DMG. Heal 10 HP.', color: '#a55eea', action: (a, t, room) => { attack(a, t, 10, room); heal(a, 10, room); } },
+    'shield': { name: 'Iron Wall', cost: 2, icon: '🛡️', desc: 'Gain 15 Armor.', color: '#3742fa', action: (a, t, room) => addArmor(a, 15, room) },
+    'shatter': { name: 'Shatter', cost: 2, icon: '🔨', desc: 'Deal 15 DMG. Ignores Armor.', color: '#f39c12', action: (a, t, room) => attack(a, t, 15, room, true) },
+    'pierce': { name: 'Piercing Lunge', cost: 2, icon: '🤺', desc: 'Deal 10 DMG. Ignores Armor. Draw 1.', color: '#747d8c', action: (a, t, room) => { attack(a, t, 10, room, true); drawCards(a, 1, room); } },
+    'sacrifice': { name: 'Blood Pact', cost: 2, icon: '🩸', desc: 'Lose 15 HP. Deal 30 DMG.', color: '#c0392b', action: (a, t, room) => { directDamage(a, 15, room); attack(a, t, 30, room); } },
+    'leech_seed': { name: 'Leech Seed', cost: 2, icon: '🌰', desc: 'Apply 3 Poison. Gain 3 Regen.', color: '#27ae60', action: (a, t, room) => { addStatus(t, 'poison', 3, room); addStatus(a, 'regen', 3, room); } },
+    'meditate': { name: 'Meditate', cost: 2, icon: '🧘', desc: 'Heal 15 HP. Draw 1 card.', color: '#3498db', action: (a, t, room) => { heal(a, 15, room); drawCards(a, 1, room); } },
+    
+    // 1 Mana (Cheap / Situational)
+    'poison': { name: 'Poison Flask', cost: 1, icon: '🧪', desc: 'Deal 5 DMG. Apply 5 Poison.', color: '#2ecc71', action: (a, t, room) => { attack(a, t, 5, room); addStatus(t, 'poison', 5, room); } },
+    'reckless': { name: 'Reckless Swing', cost: 1, icon: '🎲', desc: '50% chance for 30 DMG, 50% for 0.', color: '#e67e22', action: (a, t, room) => { if(Math.random() > 0.5) attack(a, t, 30, room); else logAction(`💨 ${a.name} swung wildly and missed!`, room, a.id); } },
+    'regen': { name: 'Regrowth', cost: 1, icon: '🌱', desc: 'Heal 5 HP. Gain 5 Regen.', color: '#1abc9c', action: (a, t, room) => { heal(a, 5, room); addStatus(a, 'regen', 5, room); } },
+    'quick_strike': { name: 'Quick Strike', cost: 1, icon: '⚡', desc: 'Deal 8 DMG. Draw 1 card.', color: '#f1c40f', action: (a, t, room) => { attack(a, t, 8, room); drawCards(a, 1, room); } },
+    'venom_bite': { name: 'Venom Bite', cost: 1, icon: '🐍', desc: 'Deal 10 DMG. If Poisoned, +15 DMG.', color: '#16a085', action: (a, t, room) => { if (t.poison > 0) attack(a, t, 25, room); else attack(a, t, 10, room); } },
+    'cursed_blade': { name: 'Cursed Blade', cost: 1, icon: '🗡️', desc: 'Deal 22 DMG. Gain 3 Poison.', color: '#8e44ad', action: (a, t, room) => { attack(a, t, 22, room); addStatus(a, 'poison', 3, room); } },
+
+    // 3 Mana (Heavy Hitters)
+    'execute': { name: 'Execute', cost: 3, icon: '☠️', desc: 'Deal 35 DMG if enemy HP < 80, else 8.', color: '#2f3542', action: (a, t, room) => { if(t.hp < 80) attack(a, t, 35, room); else attack(a, t, 8, room); } },
+    'preparation': { name: 'Preparation', cost: 3, icon: '🎒', desc: 'Gain 10 Armor. Draw 2 cards.', color: '#95a5a6', action: (a, t, room) => { addArmor(a, 10, room); drawCards(a, 2, room); } },
+    'double_strike': { name: 'Double Strike', cost: 3, icon: '⚔️', desc: 'Deal 8 DMG twice.', color: '#e74c3c', action: (a, t, room) => { attack(a, t, 8, room); attack(a, t, 8, room); } },
+    'fortify': { name: 'Fortify', cost: 3, icon: '🏰', desc: 'Double your current Armor.', color: '#2980b9', action: (a, t, room) => { const amt = a.armor; addArmor(a, amt, room); } },
+    'panic': { name: 'Panic Button', cost: 3, icon: '🚨', desc: 'If HP < 80, gain 40 Armor. Else, 12.', color: '#c0392b', action: (a, t, room) => { if (a.hp < 80) addArmor(a, 40, room); else addArmor(a, 12, room); } },
+
+    // 0 Mana (Combo / Enablers)
+    'overclock': { name: 'Overclock', cost: 0, icon: '⚙️', desc: 'Lose 10 HP. Draw 3 cards.', color: '#d35400', action: (a, t, room) => { directDamage(a, 10, room); drawCards(a, 3, room); } },
+    'focus': { name: 'Focus', cost: 0, icon: '🧠', desc: 'Gain 2 Mana.', color: '#9b59b6', action: (a, t, room) => { gainMana(a, 2, room); } },
+    'blood_magic': { name: 'Blood Magic', cost: 0, icon: '🧛', desc: 'Lose 15 HP. Gain 3 Mana.', color: '#c0392b', action: (a, t, room) => { directDamage(a, 15, room); gainMana(a, 3, room); } },
+    'mana_gem': { name: 'Mana Gem', cost: 0, icon: '💎', desc: 'Gain 1 Mana. Draw 1 card.', color: '#3498db', action: (a, t, room) => { gainMana(a, 1, room); drawCards(a, 1, room); } }
 };
 const cardKeys = Object.keys(cards);
 
@@ -115,6 +128,9 @@ function checkGameOver(room) {
 }
 
 function processTurnStart(entity, room) {
+    entity.mana = MAX_MANA;
+    drawCards(entity, 2, room); // Draw 2 cards at start of turn instead of 1 per play
+    
     if (entity.poison > 0) {
         entity.hp -= entity.poison;
         logAction(`🧪 Poison dealt ${entity.poison} DMG to ${entity.name}.`, room, 'sys');
@@ -138,7 +154,6 @@ function broadcastState(roomId) {
     const p1Rematch = room.rematchRequests ? !!room.rematchRequests[room.p1.id] : false;
     const p2Rematch = (room.p2 && room.rematchRequests) ? !!room.rematchRequests[room.p2.id] : false;
 
-    // Send oppRematch so the client knows if the other player already clicked it
     io.to(room.p1.id).emit('game_state', { ...room, me: 'p1', opponent: 'p2', myHand: room.p1.hand, oppHandCount: p2HandCount, hasMulliganed: room.p1.hasMulliganed, myRematch: p1Rematch, oppRematch: p2Rematch });
     if(room.p2) {
         io.to(room.p2.id).emit('game_state', { ...room, me: 'p2', opponent: 'p1', myHand: room.p2.hand, oppHandCount: p1HandCount, hasMulliganed: room.p2.hasMulliganed, myRematch: p2Rematch, oppRematch: p1Rematch });
@@ -151,7 +166,7 @@ io.on('connection', (socket) => {
         const roomId = Math.random().toString(36).substring(2, 8).toUpperCase();
         rooms[roomId] = {
             id: roomId,
-            p1: { id: socket.id, name: "Player 1", hp: MAX_HP, armor: 0, poison: 0, regen: 0, weakness: 0, hand: getRandomHand(5), hasMulliganed: false },
+            p1: { id: socket.id, name: "Player 1", hp: MAX_HP, mana: MAX_MANA, armor: 0, poison: 0, regen: 0, weakness: 0, hand: getRandomHand(5), hasMulliganed: false },
             p2: null,
             turn: 'p1',
             logs: [{ text: "Room created. Waiting for opponent...", actor: "sys" }],
@@ -167,7 +182,7 @@ io.on('connection', (socket) => {
     socket.on('join_room', (roomId) => {
         roomId = roomId.toUpperCase();
         if (rooms[roomId] && !rooms[roomId].p2) {
-            rooms[roomId].p2 = { id: socket.id, name: "Player 2", hp: MAX_HP, armor: 0, poison: 0, regen: 0, weakness: 0, hand: getRandomHand(5), hasMulliganed: false };
+            rooms[roomId].p2 = { id: socket.id, name: "Player 2", hp: MAX_HP, mana: MAX_MANA, armor: 0, poison: 0, regen: 0, weakness: 0, hand: getRandomHand(5), hasMulliganed: false };
             socket.join(roomId);
             logAction("Player 2 joined! Game started.", rooms[roomId], 'sys');
             socket.emit('room_joined', roomId);
@@ -207,8 +222,8 @@ io.on('connection', (socket) => {
         logAction(`🔄 ${actorName} wants a rematch...`, room, 'sys');
         
         if (room.rematchRequests[room.p1.id] && room.rematchRequests[room.p2.id]) {
-            room.p1 = { ...room.p1, hp: MAX_HP, armor: 0, poison: 0, regen: 0, weakness: 0, hand: getRandomHand(5), hasMulliganed: false };
-            room.p2 = { ...room.p2, hp: MAX_HP, armor: 0, poison: 0, regen: 0, weakness: 0, hand: getRandomHand(5), hasMulliganed: false };
+            room.p1 = { ...room.p1, hp: MAX_HP, mana: MAX_MANA, armor: 0, poison: 0, regen: 0, weakness: 0, hand: getRandomHand(5), hasMulliganed: false };
+            room.p2 = { ...room.p2, hp: MAX_HP, mana: MAX_MANA, armor: 0, poison: 0, regen: 0, weakness: 0, hand: getRandomHand(5), hasMulliganed: false };
             room.turn = 'p1';
             room.gameOver = false;
             room.winner = null;
@@ -235,18 +250,39 @@ io.on('connection', (socket) => {
         const cardId = actor.hand[cardIndex];
         const card = cards[cardId];
 
+        // Check Mana
+        if (actor.mana < card.cost) return;
+        
+        // Consume Mana & Play
+        actor.mana -= card.cost;
         actor.hand.splice(cardIndex, 1);
-        logAction(`👉 ${actor.name} played [${card.name}]!`, room, actorKey);
+        
+        logAction(`👉 ${actor.name} played [${card.name}] (-${card.cost} Mana)`, room, actorKey);
         card.action(actor, target, room);
+        
         checkGameOver(room);
+        broadcastState(roomId);
+    });
+    
+    // New Event: Ending turn explicitly
+    socket.on('end_turn', (roomId) => {
+        const room = rooms[roomId];
+        if (!room || room.gameOver) return;
 
-        if (!room.gameOver) {
-            drawCards(actor, 1, room);
-            room.turn = targetKey;
-            processTurnStart(target, room);
-            checkGameOver(room);
-        }
+        const isP1 = room.p1.id === socket.id;
+        const actorKey = isP1 ? 'p1' : 'p2';
+        const targetKey = isP1 ? 'p2' : 'p1';
 
+        if (room.turn !== actorKey) return;
+        
+        const actor = room[actorKey];
+        const target = room[targetKey];
+        
+        logAction(`🛑 ${actor.name} ended their turn.`, room, actorKey);
+        room.turn = targetKey;
+        processTurnStart(target, room);
+        
+        checkGameOver(room);
         broadcastState(roomId);
     });
 
