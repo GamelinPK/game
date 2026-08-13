@@ -5,10 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Card Battler: Online</title>
     <style>
-        /* Exact same CSS as before for consistent look */
-        :root { --bg-color: #0f0f1b; --panel-bg: #1a1a2e; --text-light: #f1f2f6; --attack-color: #ff4757; --heal-color: #2ed573; --block-color: #3742fa; --poison-color: #a55eea; --ui-bg: #2f3542; }
+        :root { --bg-color: #0f0f1b; --panel-bg: #1a1a2e; --text-light: #f1f2f6; --attack-color: #ff4757; --heal-color: #2ed573; --armor-color: #3742fa; --poison-color: #a55eea; --ui-bg: #2f3542; }
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: var(--bg-color); color: var(--text-light); margin: 0; padding: 20px; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
-        .game-container { background-color: var(--panel-bg); border-radius: 15px; padding: 30px; width: 100%; max-width: 700px; box-shadow: 0 10px 40px rgba(0,0,0,0.7); text-align: center; position: relative; }
+        .game-container { background-color: var(--panel-bg); border-radius: 15px; padding: 30px; width: 100%; max-width: 750px; box-shadow: 0 10px 40px rgba(0,0,0,0.7); text-align: center; position: relative; }
         h1 { color: #ff6b81; margin-top: 0; }
         .screen { display: none; }
         .screen.active { display: block; }
@@ -24,7 +23,7 @@
         .health-text { position: absolute; top: 0; left: 0; width: 100%; text-align: center; font-size: 13px; line-height: 24px; font-weight: bold; text-shadow: 1px 1px 2px black; }
         .status-container { display: flex; justify-content: center; gap: 10px; margin-top: 10px; min-height: 24px; }
         .status-badge { padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; display: flex; align-items: center; gap: 4px; }
-        .status-block { background: var(--block-color); }
+        .status-armor { background: var(--armor-color); }
         .status-poison { background: var(--poison-color); }
         .status-regen { background: var(--heal-color); color: #000; }
         .log { background-color: rgba(0, 0, 0, 0.4); height: 120px; overflow-y: auto; border-radius: 8px; padding: 10px; margin-bottom: 20px; font-size: 14px; text-align: left; display: flex; flex-direction: column; border: 1px solid #444; }
@@ -32,20 +31,20 @@
         .log .p1 { color: #7bed9f; }
         .log .p2 { color: #ff6b81; }
         .log .sys { color: #feca57; font-style: italic; }
-        .hand { display: flex; justify-content: center; gap: 15px; flex-wrap: wrap; }
-        .card { background-color: var(--ui-bg); border-radius: 8px; padding: 15px; width: 130px; cursor: pointer; transition: transform 0.2s ease, box-shadow 0.2s ease; box-shadow: 0 4px 6px rgba(0,0,0,0.5); user-select: none; border-top: 5px solid transparent; }
+        
+        .hand { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
+        .card { background-color: var(--ui-bg); border-radius: 8px; padding: 12px; width: 115px; cursor: pointer; transition: transform 0.2s ease, box-shadow 0.2s ease; box-shadow: 0 4px 6px rgba(0,0,0,0.5); user-select: none; border-top: 5px solid transparent; }
         .card:hover:not(.disabled) { transform: translateY(-8px); box-shadow: 0 8px 15px rgba(0,0,0,0.8); }
         .card.disabled { opacity: 0.4; cursor: not-allowed; transform: none; box-shadow: none; }
         .card-icon { font-size: 24px; margin-bottom: 5px; }
-        .card-title { font-weight: bold; font-size: 16px; margin-bottom: 5px; }
-        .card-desc { font-size: 12px; color: #ccc; }
+        .card-title { font-weight: bold; font-size: 14px; margin-bottom: 5px; }
+        .card-desc { font-size: 11px; color: #ccc; }
         .room-code-display { font-size: 32px; letter-spacing: 5px; color: #7bed9f; font-family: monospace; background: #222; padding: 10px; border-radius: 8px; display: inline-block; margin: 10px 0; }
     </style>
 </head>
 <body>
 
     <div class="game-container">
-        
         <!-- MENU SCREEN -->
         <div id="menu-screen" class="screen active">
             <h1>Card Battler: Online</h1>
@@ -73,6 +72,7 @@
                     <h3 id="my-name">You</h3>
                     <div class="health-bar-container"><div class="health-bar" id="my-hp-bar"></div><div class="health-text" id="my-hp-text">100 / 100 HP</div></div>
                     <div class="status-container" id="my-status"></div>
+                    <p style="font-size: 12px; color: #aaa; margin-top: 5px;" id="my-hand-count"></p>
                 </div>
                 
                 <div style="font-size: 24px; font-weight: bold; align-self: center; color: #747d8c;">VS</div>
@@ -81,6 +81,7 @@
                     <h3 id="opp-name">Opponent</h3>
                     <div class="health-bar-container"><div class="health-bar" id="opp-hp-bar"></div><div class="health-text" id="opp-hp-text">100 / 100 HP</div></div>
                     <div class="status-container" id="opp-status"></div>
+                    <p style="font-size: 12px; color: #aaa; margin-top: 5px;" id="opp-hand-count"></p>
                 </div>
             </div>
 
@@ -96,28 +97,37 @@
         </div>
     </div>
 
-    <!-- Load Socket.io Client -->
     <script src="/socket.io/socket.io.js"></script>
     <script>
         const socket = io();
         let currentRoom = null;
-        let myKey = null; // 'p1' or 'p2'
+        let myKey = null; 
         const MAX_HP = 100;
 
-        // Card definitions for rendering (Logic stays on server)
         const cards = {
             'strike': { name: 'Strike', icon: '🗡️', desc: 'Deal 15 DMG.', color: '#ff4757' },
             'heal': { name: 'Bandage', icon: '💚', desc: 'Restore 18 HP.', color: '#2ed573' },
             'fireball': { name: 'Fireball', icon: '🔥', desc: 'Deal 25 DMG. You take 5 DMG.', color: '#ff6348' },
             'vampire': { name: 'Vampiric Bite', icon: '🦇', desc: 'Deal 10 DMG. Heal 10 HP.', color: '#a55eea' },
-            'shield': { name: 'Iron Wall', icon: '🛡️', desc: 'Gain 20 Block.', color: '#3742fa' },
+            'shield': { name: 'Iron Wall', icon: '🛡️', desc: 'Gain 10 Armor.', color: '#3742fa' },
             'poison': { name: 'Poison Flask', icon: '🧪', desc: 'Deal 5 DMG. Apply 5 Poison.', color: '#2ecc71' },
             'execute': { name: 'Execute', icon: '☠️', desc: 'Deal 35 DMG if enemy HP < 40, else 8 DMG.', color: '#2f3542' },
-            'shatter': { name: 'Shatter', icon: '🔨', desc: 'Destroy enemy Block. Deal 10 DMG.', color: '#f39c12' },
+            'shatter': { name: 'Shatter', icon: '🔨', desc: 'Destroy enemy Armor. Deal 10 DMG.', color: '#f39c12' },
             'reckless': { name: 'Reckless Swing', icon: '🎲', desc: '50% chance for 30 DMG, 50% for 0.', color: '#e67e22' },
             'regen': { name: 'Regrowth', icon: '🌱', desc: 'Heal 5 HP. Gain 5 Regen.', color: '#1abc9c' },
-            'thief': { name: 'Siphon', icon: '🧤', desc: 'Steal all enemy Block. Deal 5 DMG.', color: '#747d8c' },
-            'sacrifice': { name: 'Blood Pact', icon: '🩸', desc: 'Lose 15 HP. Deal 30 DMG.', color: '#c0392b' }
+            'thief': { name: 'Siphon', icon: '🧤', desc: 'Steal all enemy Armor. Deal 5 DMG.', color: '#747d8c' },
+            'sacrifice': { name: 'Blood Pact', icon: '🩸', desc: 'Lose 15 HP. Deal 30 DMG.', color: '#c0392b' },
+            
+            'quick_strike': { name: 'Quick Strike', icon: '⚡', desc: 'Deal 8 DMG. Draw 1 card.', color: '#f1c40f' },
+            'preparation': { name: 'Preparation', icon: '🎒', desc: 'Gain 5 Armor. Draw 2 cards.', color: '#95a5a6' },
+            'double_strike': { name: 'Double Strike', icon: '⚔️', desc: 'Deal 8 DMG twice.', color: '#e74c3c' },
+            'leech_seed': { name: 'Leech Seed', icon: '🌰', desc: 'Apply 3 Poison. Gain 3 Regen.', color: '#27ae60' },
+            'cursed_blade': { name: 'Cursed Blade', icon: '🗡️', desc: 'Deal 22 DMG. You gain 3 Poison.', color: '#8e44ad' },
+            'fortify': { name: 'Fortify', icon: '🏰', desc: 'Double your current Armor.', color: '#2980b9' },
+            'panic': { name: 'Panic Button', icon: '🚨', desc: 'If HP < 30, gain 25 Armor. Else, gain 5.', color: '#c0392b' },
+            'venom_bite': { name: 'Venom Bite', icon: '🐍', desc: 'Deal 10 DMG. If target has Poison, deal +15 DMG.', color: '#16a085' },
+            'meditate': { name: 'Meditate', icon: '🧘', desc: 'Heal 15 HP. Draw 1 card.', color: '#3498db' },
+            'overclock': { name: 'Overclock', icon: '⚙️', desc: 'Lose 10 HP. Draw 3 cards.', color: '#d35400' }
         };
 
         function showScreen(id) {
@@ -150,9 +160,8 @@
             location.reload();
         });
 
-        // The master update loop - purely drawing what the server tells us
         socket.on('game_state', (state) => {
-            if(!state.p2) return; // Still waiting in lobby
+            if(!state.p2) return; 
             showScreen('game');
             
             myKey = state.me;
@@ -161,11 +170,13 @@
             document.getElementById('turn-indicator').innerText = state.gameOver ? "Game Over" : (isMyTurn ? "Your Turn!" : "Opponent is thinking...");
             document.getElementById('turn-indicator').style.color = isMyTurn ? "#7bed9f" : "#f1f2f6";
 
-            // Render Stats
             updateStats('my', state[state.me]);
             updateStats('opp', state[state.opponent]);
+            
+            // Show hand sizes
+            document.getElementById('my-hand-count').innerText = `Cards in Hand: ${state.myHand.length}`;
+            document.getElementById('opp-hand-count').innerText = `Cards in Hand: ${state.oppHandCount}`;
 
-            // Render Hand
             const handDiv = document.getElementById('player-hand');
             handDiv.innerHTML = '';
             
@@ -188,14 +199,13 @@
                 });
             }
 
-            // Render Logs
             const logDiv = document.getElementById('battle-log');
             logDiv.innerHTML = '';
             state.logs.forEach(l => {
                 const p = document.createElement('p');
                 p.innerText = l.text;
                 if(l.actor === 'sys') p.className = 'sys';
-                else p.className = (l.actor === myKey) ? 'p1' : 'p2'; // p1 is green (me), p2 is red (opponent)
+                else p.className = (l.actor === myKey) ? 'p1' : 'p2'; 
                 logDiv.appendChild(p);
             });
             logDiv.scrollTop = logDiv.scrollHeight;
@@ -209,7 +219,7 @@
 
             const statusDiv = document.getElementById(`${prefix}-status`);
             statusDiv.innerHTML = '';
-            if (entity.block > 0) statusDiv.innerHTML += `<div class="status-badge status-block">🛡️ ${entity.block}</div>`;
+            if (entity.armor > 0) statusDiv.innerHTML += `<div class="status-badge status-armor">🛡️ ${entity.armor}</div>`;
             if (entity.poison > 0) statusDiv.innerHTML += `<div class="status-badge status-poison">🧪 ${entity.poison}</div>`;
             if (entity.regen > 0) statusDiv.innerHTML += `<div class="status-badge status-regen">🌱 ${entity.regen}</div>`;
         }
