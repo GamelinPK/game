@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Card Battler: Online</title>
+    <style>
+        :root { --bg-color: #0f0f1b; --panel-bg: #1a1a2e; --text-light: #f1f2f6; --attack-color: #ff4757; --heal-color: #2ed573; --armor-color: #3742fa; --poison-color: #a55eea; --weakness-color: #e67e22; --mana-color: #3498db; --ui-bg: #2f3542; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: var(--bg-color); color: var(--text-light); margin: 0; padding: 20px; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+        .game-container { background-color: var(--panel-bg); border-radius: 15px; padding: 30px; width: 100%; max-width: 750px; box-shadow: 0 10px 40px rgba(0,0,0,0.7); text-align: center; position: relative; }
+        h1 { color: #ff6b81; margin-top: 0; }
+        .screen { display: none; }
+        .screen.active { display: block; }
+        input[type="text"] { width: 60%; padding: 12px; border-radius: 5px; border: 1px solid #555; background: #222; color: white; font-size: 18px; text-align: center; text-transform: uppercase; margin-bottom: 15px; }
+        button { background: #ff4757; color: white; border: none; padding: 12px 25px; font-size: 16px; font-weight: bold; border-radius: 5px; cursor: pointer; transition: background 0.2s; margin: 5px; }
+        button:hover { background: #ff6b81; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-secondary { background: var(--mana-color); }
+        .btn-secondary:hover { background: #2980b9; }
+        .arena { display: flex; justify-content: space-between; margin: 20px 0; align-items: flex-start; }
+        .character { width: 42%; background: rgba(255, 255, 255, 0.05); padding: 15px; border-radius: 10px; }
+        
+        .health-bar-container, .mana-bar-container { width: 100%; background-color: #222; border-radius: 8px; margin-top: 10px; height: 24px; position: relative; border: 2px solid #555; }
+        .health-bar { height: 100%; background-color: var(--heal-color); transition: width 0.3s ease; border-radius: 6px; }
+        .mana-bar { height: 100%; background-color: var(--mana-color); transition: width 0.3s ease; border-radius: 6px; }
+        .stat-text { position: absolute; top: 0; left: 0; width: 100%; text-align: center; font-size: 13px; line-height: 24px; font-weight: bold; text-shadow: 1px 1px 2px black; }
+        
+        .status-container { display: flex; justify-content: center; gap: 10px; margin-top: 10px; min-height: 24px; }
+        .status-badge { padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; display: flex; align-items: center; gap: 4px; }
+        .status-armor { background: var(--armor-color); }
+        .status-poison { background: var(--poison-color); }
+        .status-regen { background: var(--heal-color); color: #000; }
+        .status-weakness { background: var(--weakness-color); color: #fff; }
+        .log { background-color: rgba(0, 0, 0, 0.4); height: 120px; overflow-y: auto; border-radius: 8px; padding: 10px; margin-bottom: 20px; font-size: 14px; text-align: left; display: flex; flex-direction: column; border: 1px solid #444; }
+        .log p { margin: 3px 0; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 3px; }
+        .log .p1 { color: #7bed9f; }
+        .log .p2 { color: #ff6b81; }
+        .log .sys { color: #feca57; font-style: italic; }
+        
+        .hand { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
+        .card { background-color: var(--ui-bg); border-radius: 8px; padding: 12px; width: 115px; cursor: pointer; transition: transform 0.2s ease, box-shadow 0.2s ease; box-shadow: 0 4px 6px rgba(0,0,0,0.5); user-select: none; border-top: 5px solid transparent; position: relative; }
+        .card:hover:not(.disabled) { transform: translateY(-8px); box-shadow: 0 8px 15px rgba(0,0,0,0.8); }
+        .card.disabled { opacity: 0.4; cursor: not-allowed; transform: none; box-shadow: none; filter: grayscale(50%); }
+        .card-icon { font-size: 24px; margin-bottom: 5px; }
+        .card-title { font-weight: bold; font-size: 14px; margin-bottom: 5px; }
+        .card-desc { font-size: 11px; color: #ccc; }
+        .card-cost { position: absolute; top: -10px; left: -10px; background: var(--mana-color); border: 2px solid #2980b9; color: white; border-radius: 50%; width: 26px; height: 26px; font-weight: bold; display: flex; justify-content: center; align-items: center; font-size: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.5); }
+        
+        .room-code-display { font-size: 32px; letter-spacing: 5px; color: #7bed9f; font-family: monospace; background: #222; padding: 10px; border-radius: 8px; display: inline-block; margin: 10px 0; }
+        .hand-header { display: flex; justify-content: center; align-items: center; gap: 15px; margin-bottom: 10px; }
+        .mulligan-btn { background: #e67e22; padding: 6px 12px; font-size: 12px; margin: 0; }
+        .mulligan-btn:hover { background: #d35400; }
+        .end-turn-btn { background: var(--mana-color); padding: 6px 12px; font-size: 12px; margin: 0; }
+        .end-turn-btn:hover { background: #2980b9; }
+    </style>
+</head>
+<body>
+
+    <div class="game-container">
+        <!-- MENU SCREEN -->
+        <div id="menu-screen" class="screen active">
+            <h1>Card Battler: Online</h1>
+            <button onclick="createRoom()">Create New Game</button>
+            <hr style="border-color: #333; margin: 30px 0;">
+            <h3>Join a Friend</h3>
+            <input type="text" id="join-code" placeholder="Enter Room Code" maxlength="6">
+            <br>
+            <button class="btn-secondary" onclick="joinRoom()">Join Game</button>
+        </div>
+
+        <!-- LOBBY SCREEN -->
+        <div id="lobby-screen" class="screen">
+            <h1>Waiting for Opponent...</h1>
+            <p>Send this code to your friend:</p>
+            <div class="room-code-display" id="display-room-code">XXXXXX</div>
+        </div>
+
+        <!-- BATTLE SCREEN -->
+        <div id="game-screen" class="screen">
+            <h1 id="turn-indicator">Waiting for turn...</h1>
+            
+            <div class="arena">
+                <div class="character" id="active-char">
+                    <h3 id="my-name">You</h3>
+                    <div class="health-bar-container"><div class="health-bar" id="my-hp-bar"></div><div class="stat-text" id="my-hp-text">200 / 200 HP</div></div>
+                    <div class="mana-bar-container"><div class="mana-bar" id="my-mana-bar"></div><div class="stat-text" id="my-mana-text">5 / 5 Mana</div></div>
+                    <div class="status-container" id="my-status"></div>
+                    <p style="font-size: 12px; color: #aaa; margin-top: 5px;" id="my-hand-count"></p>
+                </div>
+                
+                <div style="font-size: 24px; font-weight: bold; align-self: center; color: #747d8c;">VS</div>
+                
+                <div class="character" id="inactive-char">
+                    <h3 id="opp-name">Opponent</h3>
+                    <div class="health-bar-container"><div class="health-bar" id="opp-hp-bar"></div><div class="stat-text" id="opp-hp-text">200 / 200 HP</div></div>
+                    <div class="mana-bar-container"><div class="mana-bar" id="opp-mana-bar"></div><div class="stat-text" id="opp-mana-text">5 / 5 Mana</div></div>
+                    <div class="status-container" id="opp-status"></div>
+                    <p style="font-size: 12px; color: #aaa; margin-top: 5px;" id="opp-hand-count"></p>
+                </div>
+            </div>
+
+            <div class="log" id="battle-log"></div>
+
+            <div class="hand-header">
+                <h3 style="margin: 0;">Your Hand</h3>
+                <button id="end-turn-btn" class="end-turn-btn" style="display: none;" onclick="endTurn()">🛑 End Turn</button>
+                <button id="mulligan-btn" class="mulligan-btn" style="display: none;" onclick="useMulligan()">🔄 Mulligan</button>
+            </div>
+            <div class="hand" id="player-hand"></div>
+            
+            <div id="game-over-container" style="display: none; margin-top: 20px;">
+                <h2 id="game-over-text" style="color: #feca57;"></h2>
+                <button id="rematch-btn" onclick="requestRematch()">Request Rematch</button>
+                <button onclick="location.reload()">Back to Menu</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+        let currentRoom = null;
+        let myKey = null; 
+        const MAX_HP = 200;
+        const MAX_MANA = 5;
+
+        // Visual strings updated to match server buffs and costs
+        const cards = {
+            'strike': { name: 'Strike', cost: 2, icon: '🗡️', desc: 'Deal 15 DMG.', color: '#ff4757' },
+            'heal': { name: 'Bandage', cost: 2, icon: '💚', desc: 'Restore 18 HP.', color: '#2ed573' },
+            'fireball': { name: 'Fireball', cost: 2, icon: '🔥', desc: 'Deal 25 DMG. Take 5 DMG.', color: '#ff6348' },
+            'vampire': { name: 'Vampiric Bite', cost: 2, icon: '🦇', desc: 'Deal 10 DMG. Heal 10 HP.', color: '#a55eea' },
+            'shield': { name: 'Iron Wall', cost: 2, icon: '🛡️', desc: 'Gain 15 Armor.', color: '#3742fa' },
+            'shatter': { name: 'Shatter', cost: 2, icon: '🔨', desc: 'Deal 15 DMG. Ignores Armor.', color: '#f39c12' },
+            'pierce': { name: 'Piercing Lunge', cost: 2, icon: '🤺', desc: 'Deal 10 DMG. Ignores Armor. Draw 1.', color: '#747d8c' },
+            'sacrifice': { name: 'Blood Pact', cost: 2, icon: '🩸', desc: 'Lose 15 HP. Deal 30 DMG.', color: '#c0392b' },
+            'leech_seed': { name: 'Leech Seed', cost: 2, icon: '🌰', desc: 'Apply 3 Poison. Gain 3 Regen.', color: '#27ae60' },
+            'meditate': { name: 'Meditate', cost: 2, icon: '🧘', desc: 'Heal 15 HP. Draw 1 card.', color: '#3498db' },
+            
+            'poison': { name: 'Poison Flask', cost: 1, icon: '🧪', desc: 'Deal 5 DMG. Apply 5 Poison.', color: '#2ecc71' },
+            'reckless': { name: 'Reckless Swing', cost: 1, icon: '🎲', desc: '50% chance for 30 DMG, 50% for 0.', color: '#e67e22' },
+            'regen': { name: 'Regrowth', cost: 1, icon: '🌱', desc: 'Heal 5 HP. Gain 5 Regen.', color: '#1abc9c' },
+            'quick_strike': { name: 'Quick Strike', cost: 1, icon: '⚡', desc: 'Deal 8 DMG. Draw 1 card.', color: '#f1c40f' },
+            'venom_bite': { name: 'Venom Bite', cost: 1, icon: '🐍', desc: 'Deal 10 DMG. If Poisoned, +15 DMG.', color: '#16a085' },
+            'cursed_blade': { name: 'Cursed Blade', cost: 1, icon: '🗡️', desc: 'Deal 22 DMG. Gain 3 Poison.', color: '#8e44ad' },
+            
+            'execute': { name: 'Execute', cost: 3, icon: '☠️', desc: 'Deal 35 DMG if enemy HP < 80, else 8.', color: '#2f3542' },
+            'preparation': { name: 'Preparation', cost: 3, icon: '🎒', desc: 'Gain 10 Armor. Draw 2 cards.', color: '#95a5a6' },
+            'double_strike': { name: 'Double Strike', cost: 3, icon: '⚔️', desc: 'Deal 8 DMG twice.', color: '#e74c3c' },
+            'fortify': { name: 'Fortify', cost: 3, icon: '🏰', desc: 'Double your current Armor.', color: '#2980b9' },
+            'panic': { name: 'Panic Button', cost: 3, icon: '🚨', desc: 'If HP < 80, gain 40 Armor. Else, 12.', color: '#c0392b' },
+            
+            'overclock': { name: 'Overclock', cost: 0, icon: '⚙️', desc: 'Lose 10 HP. Draw 3 cards.', color: '#d35400' },
+            'focus': { name: 'Focus', cost: 0, icon: '🧠', desc: 'Gain 2 Mana.', color: '#9b59b6' },
+            'blood_magic': { name: 'Blood Magic', cost: 0, icon: '🧛', desc: 'Lose 15 HP. Gain 3 Mana.', color: '#c0392b' },
+            'mana_gem': { name: 'Mana Gem', cost: 0, icon: '💎', desc: 'Gain 1 Mana. Draw 1 card.', color: '#3498db' }
+        };
+
+        function showScreen(id) {
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            document.getElementById(id + '-screen').classList.add('active');
+        }
+
+        function createRoom() { socket.emit('create_room'); }
+        function joinRoom() { 
+            const code = document.getElementById('join-code').value.trim();
+            if(code.length > 0) socket.emit('join_room', code);
+        }
+        function playCard(index, cost, currentMana) { 
+            if (currentMana >= cost) {
+                socket.emit('play_card', { roomId: currentRoom, cardIndex: index }); 
+            }
+        }
+        function endTurn() { socket.emit('end_turn', currentRoom); }
+        function useMulligan() {
+            if(confirm("Discard your hand and draw 5 new cards? (You can only do this once!)")) {
+                socket.emit('mulligan', currentRoom);
+            }
+        }
+        function requestRematch() { socket.emit('request_rematch', currentRoom); }
+
+        socket.on('room_created', (roomId) => {
+            currentRoom = roomId;
+            document.getElementById('display-room-code').innerText = roomId;
+            showScreen('lobby');
+        });
+
+        socket.on('room_joined', (roomId) => {
+            currentRoom = roomId;
+            showScreen('game');
+        });
+
+        socket.on('error_msg', (msg) => { alert(msg); });
+        
+        socket.on('opponent_disconnected', () => {
+            alert("Opponent disconnected! The game has ended.");
+            location.reload();
+        });
+
+        socket.on('game_state', (state) => {
+            if(!state.p2) return; 
+            showScreen('game');
+            
+            myKey = state.me;
+            const isMyTurn = state.turn === myKey;
+            
+            document.getElementById('turn-indicator').innerText = state.gameOver ? "Game Over" : (isMyTurn ? "Your Turn!" : "Opponent is thinking...");
+            document.getElementById('turn-indicator').style.color = isMyTurn ? "#7bed9f" : "#f1f2f6";
+
+            const myState = state[state.me];
+            const oppState = state[state.opponent];
+
+            updateStats('my', myState);
+            updateStats('opp', oppState);
+            
+            document.getElementById('my-hand-count').innerText = `Cards in Hand: ${state.myHand.length}`;
+            document.getElementById('opp-hand-count').innerText = `Cards in Hand: ${state.oppHandCount}`;
+
+            if (isMyTurn && !state.gameOver) {
+                document.getElementById('end-turn-btn').style.display = 'inline-block';
+                document.getElementById('mulligan-btn').style.display = state.hasMulliganed ? 'none' : 'inline-block';
+            } else {
+                document.getElementById('end-turn-btn').style.display = 'none';
+                document.getElementById('mulligan-btn').style.display = 'none';
+            }
+
+            const handDiv = document.getElementById('player-hand');
+            handDiv.innerHTML = '';
+            
+            if (state.gameOver) {
+                document.getElementById('game-over-container').style.display = 'block';
+                let winnerText = "It's a Draw!";
+                if (state.winner === 'Player 1' && myKey === 'p1') winnerText = "You Win!";
+                else if (state.winner === 'Player 2' && myKey === 'p2') winnerText = "You Win!";
+                else if (state.winner !== 'Draw') winnerText = "You Lost!";
+                document.getElementById('game-over-text').innerText = winnerText;
+                
+                const rematchBtn = document.getElementById('rematch-btn');
+                if (state.myRematch) {
+                    rematchBtn.innerText = "Waiting for opponent...";
+                    rematchBtn.disabled = true;
+                } else if (state.oppRematch) {
+                    rematchBtn.innerText = "Accept Rematch";
+                    rematchBtn.disabled = false;
+                } else {
+                    rematchBtn.innerText = "Request Rematch";
+                    rematchBtn.disabled = false;
+                }
+            } else {
+                document.getElementById('game-over-container').style.display = 'none';
+                state.myHand.forEach((cardId, index) => {
+                    const card = cards[cardId];
+                    const canAfford = isMyTurn && myState.mana >= card.cost;
+                    const cardEl = document.createElement('div');
+                    cardEl.className = `card ${!canAfford ? 'disabled' : ''}`;
+                    cardEl.style.borderTopColor = card.color;
+                    
+                    cardEl.innerHTML = `
+                        <div class="card-cost">${card.cost}</div>
+                        <div class="card-icon">${card.icon}</div>
+                        <div class="card-title">${card.name}</div>
+                        <div class="card-desc">${card.desc}</div>
+                    `;
+                    
+                    if(canAfford) cardEl.onclick = () => playCard(index, card.cost, myState.mana);
+                    handDiv.appendChild(cardEl);
+                });
+            }
+
+            const logDiv = document.getElementById('battle-log');
+            logDiv.innerHTML = '';
+            state.logs.forEach(l => {
+                const p = document.createElement('p');
+                p.innerText = l.text;
+                if(l.actor === 'sys') p.className = 'sys';
+                else p.className = (l.actor === myKey) ? 'p1' : 'p2'; 
+                logDiv.appendChild(p);
+            });
+            logDiv.scrollTop = logDiv.scrollHeight;
+        });
+
+        function updateStats(prefix, entity) {
+            // HP Bar
+            const hpBar = document.getElementById(`${prefix}-hp-bar`);
+            hpBar.style.width = `${(entity.hp / MAX_HP) * 100}%`;
+            hpBar.style.backgroundColor = entity.hp <= 40 ? 'var(--attack-color)' : 'var(--heal-color)';
+            document.getElementById(`${prefix}-hp-text`).innerText = `${entity.hp} / ${MAX_HP} HP`;
+
+            // Mana Bar (Cap visual at MAX_MANA but text shows actual if over)
+            const manaBar = document.getElementById(`${prefix}-mana-bar`);
+            const visualMana = Math.min(entity.mana, MAX_MANA);
+            manaBar.style.width = `${(visualMana / MAX_MANA) * 100}%`;
+            document.getElementById(`${prefix}-mana-text`).innerText = `${entity.mana} / ${MAX_MANA} Mana`;
+
+            // Statuses
+            const statusDiv = document.getElementById(`${prefix}-status`);
+            statusDiv.innerHTML = '';
+            if (entity.armor > 0) statusDiv.innerHTML += `<div class="status-badge status-armor">🛡️ ${entity.armor}</div>`;
+            if (entity.poison > 0) statusDiv.innerHTML += `<div class="status-badge status-poison">🧪 ${entity.poison}</div>`;
+            if (entity.regen > 0) statusDiv.innerHTML += `<div class="status-badge status-regen">🌱 ${entity.regen}</div>`;
+            if (entity.weakness > 0) statusDiv.innerHTML += `<div class="status-badge status-weakness">🎯 ${entity.weakness}</div>`;
+        }
+    </script>
+</body>
+</html>
