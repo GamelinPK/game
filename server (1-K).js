@@ -106,7 +106,6 @@ function broadcastState(roomId) {
     if (room.p1.id) {
         io.to(room.p1.id).emit('game_state', {
             id: room.id, turn: room.turn, phase: room.phase, supply: room.supply, logs: room.logs, gameOver: room.gameOver, winner: room.winner,
-            myKey: 'p1',
             me: p1State,
             opponent: p2State ? { name: p2State.name, deckCount: p2State.deckCount, discardCount: p2State.discardCount, handCount: p2State.hand.length, played: p2State.played, prestige: p2State.prestige } : null
         });
@@ -114,7 +113,6 @@ function broadcastState(roomId) {
     if (room.p2 && room.p2.id) {
         io.to(room.p2.id).emit('game_state', {
             id: room.id, turn: room.turn, phase: room.phase, supply: room.supply, logs: room.logs, gameOver: room.gameOver, winner: room.winner,
-            myKey: 'p2',
             me: p2State,
             opponent: { name: p1State.name, deckCount: p1State.deckCount, discardCount: p1State.discardCount, handCount: p1State.hand.length, played: p1State.played, prestige: p1State.prestige }
         });

@@ -179,18 +179,18 @@
         });
 
         socket.on('game_state', (state) => {
-            if(!state.opponent) return; 
+            if(!state.p2) return; 
             showScreen('game');
             
-            myKey = state.myKey;
+            myKey = state.me;
             const isMyTurn = state.turn === myKey;
             const phaseTitle = state.phase.charAt(0).toUpperCase() + state.phase.slice(1);
             
             document.getElementById('turn-indicator').innerText = state.gameOver ? "Game Over" : (isMyTurn ? `Your Turn - ${phaseTitle} Phase` : `Opponent's Turn - ${phaseTitle} Phase`);
             document.getElementById('turn-indicator').style.color = isMyTurn ? "#7bed9f" : "#f1f2f6";
 
-            const myState = state.me;
-            const oppState = state.opponent;
+            const myState = state[state.me];
+            const oppState = state[state.opponent];
 
             // Update My Stats
             document.getElementById('my-actions').innerText = myState.actions;
