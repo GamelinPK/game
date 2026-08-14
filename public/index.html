@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kingdom Builder: Online</title>
+    <title>Kingdom Builder: OVERPOWERED</title>
     <style>
         :root { --bg-color: #0f0f1b; --panel-bg: #1a1a2e; --text-light: #f1f2f6; --nation-color: #9b59b6; --money-color: #f1c40f; --prestige-color: #2ecc71; --ui-bg: #2f3542; }
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: var(--bg-color); color: var(--text-light); margin: 0; padding: 20px; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
-        .game-container { background-color: var(--panel-bg); border-radius: 15px; padding: 20px; width: 100%; max-width: 950px; box-shadow: 0 10px 40px rgba(0,0,0,0.7); display: flex; flex-direction: column; position: relative; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: var(--bg-color); color: var(--text-light); margin: 0; padding: 10px; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+        .game-container { background-color: var(--panel-bg); border-radius: 15px; padding: 20px; width: 100%; max-width: 1200px; box-shadow: 0 10px 40px rgba(0,0,0,0.7); display: flex; flex-direction: column; position: relative; }
         h1 { color: #f1c40f; margin-top: 0; text-align: center; }
         .screen { display: none; }
         .screen.active { display: block; }
@@ -16,45 +16,45 @@
         button { background: #3498db; color: white; border: none; padding: 10px 20px; font-size: 14px; font-weight: bold; border-radius: 5px; cursor: pointer; transition: background 0.2s; margin: 5px; }
         button:hover { background: #2980b9; }
         
-        .supply-container { display: flex; justify-content: center; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; background: rgba(0,0,0,0.2); padding: 15px; border-radius: 8px; }
+        .supply-container { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; margin-bottom: 15px; background: rgba(0,0,0,0.2); padding: 15px; border-radius: 8px; max-height: 300px; overflow-y: auto; }
         
-        .arena { display: flex; justify-content: space-between; margin-bottom: 20px; gap: 20px; }
+        .arena { display: flex; justify-content: space-between; margin-bottom: 15px; gap: 20px; }
         .character { flex: 1; background: rgba(255, 255, 255, 0.05); padding: 15px; border-radius: 10px; }
         
         .stats-bar { display: flex; flex-wrap: wrap; gap: 10px; background: rgba(0,0,0,0.3); padding: 8px; border-radius: 5px; margin-bottom: 10px; font-size: 13px; justify-content: center; font-weight: bold; }
         
-        .played-container { display: flex; gap: 5px; min-height: 70px; background: rgba(0,0,0,0.3); border-radius: 8px; padding: 10px; margin-bottom: 10px; flex-wrap: wrap; align-items: center; }
-        .mini-card { background: var(--ui-bg); border-radius: 4px; padding: 5px; width: 60px; font-size: 11px; text-align: center; border-top: 3px solid transparent; }
+        .played-container { display: flex; gap: 5px; min-height: 50px; background: rgba(0,0,0,0.3); border-radius: 8px; padding: 8px; margin-bottom: 10px; flex-wrap: wrap; align-items: center; }
+        .mini-card { background: var(--ui-bg); border-radius: 4px; padding: 3px; width: 50px; font-size: 9px; text-align: center; border-top: 3px solid transparent; }
         
-        .hand { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
-        .card { background-color: var(--ui-bg); border-radius: 8px; padding: 10px; width: 100px; cursor: pointer; transition: transform 0.2s; box-shadow: 0 4px 6px rgba(0,0,0,0.5); user-select: none; border-top: 5px solid transparent; position: relative; text-align: center; }
-        .card:hover:not(.disabled) { transform: translateY(-5px); box-shadow: 0 8px 15px rgba(0,0,0,0.8); }
+        .hand { display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; }
+        .card { background-color: var(--ui-bg); border-radius: 8px; padding: 8px; width: 75px; cursor: pointer; transition: transform 0.2s; box-shadow: 0 4px 6px rgba(0,0,0,0.5); user-select: none; border-top: 5px solid transparent; position: relative; text-align: center; }
+        .card:hover:not(.disabled) { transform: translateY(-5px); box-shadow: 0 8px 15px rgba(0,0,0,0.8); z-index: 10; }
         .card.disabled { opacity: 0.4; cursor: not-allowed; transform: none; filter: grayscale(40%); }
         
-        .card-icon { font-size: 24px; margin-bottom: 5px; }
-        .card-title { font-weight: bold; font-size: 13px; margin-bottom: 5px; }
-        .card-desc { font-size: 10px; color: #ccc; }
-        .card-type { font-size: 9px; margin-top: 5px; color: #aaa; font-weight: bold; }
+        .card-icon { font-size: 20px; margin-bottom: 2px; }
+        .card-title { font-weight: bold; font-size: 11px; margin-bottom: 2px; line-height: 1.1; }
+        .card-desc { font-size: 9px; color: #ccc; line-height: 1.1; }
+        .card-type { font-size: 8px; margin-top: 5px; color: #aaa; font-weight: bold; }
         
-        .card-cost { position: absolute; top: -8px; left: -8px; background: #34495e; color: white; border-radius: 50%; width: 22px; height: 22px; font-weight: bold; display: flex; justify-content: center; align-items: center; font-size: 12px; border: 1px solid #fff; z-index: 5; }
-        .pile-count { position: absolute; top: -8px; right: -8px; background: #e74c3c; color: white; border-radius: 50%; width: 22px; height: 22px; font-weight: bold; display: flex; justify-content: center; align-items: center; font-size: 12px; border: 1px solid #fff; z-index: 5;}
+        .card-cost { position: absolute; top: -8px; left: -8px; background: #34495e; color: white; border-radius: 50%; width: 20px; height: 20px; font-weight: bold; display: flex; justify-content: center; align-items: center; font-size: 11px; border: 1px solid #fff; z-index: 5; }
+        .pile-count { position: absolute; top: -8px; right: -8px; background: #e74c3c; color: white; border-radius: 50%; width: 20px; height: 20px; font-weight: bold; display: flex; justify-content: center; align-items: center; font-size: 11px; border: 1px solid #fff; z-index: 5;}
         
         /* Tooltip implementation */
-        .tooltip { position: absolute; bottom: 105%; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.95); color: #fff; padding: 10px; border-radius: 6px; font-size: 11px; width: 160px; text-align: center; display: none; z-index: 100; pointer-events: none; border: 1px solid #777; box-shadow: 0 4px 10px rgba(0,0,0,0.8); }
+        .tooltip { position: absolute; bottom: 105%; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.95); color: #fff; padding: 8px; border-radius: 6px; font-size: 11px; width: 140px; text-align: center; display: none; z-index: 100; pointer-events: none; border: 1px solid #777; box-shadow: 0 4px 10px rgba(0,0,0,0.8); }
         .card:hover .tooltip { display: block; }
         
-        .log { background-color: rgba(0, 0, 0, 0.4); height: 100px; overflow-y: auto; border-radius: 8px; padding: 10px; margin-bottom: 15px; font-size: 13px; display: flex; flex-direction: column; border: 1px solid #444; }
+        .log { background-color: rgba(0, 0, 0, 0.4); height: 90px; overflow-y: auto; border-radius: 8px; padding: 10px; margin-bottom: 15px; font-size: 12px; display: flex; flex-direction: column; border: 1px solid #444; }
         .log p { margin: 2px 0; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 2px; }
         .log .p1 { color: #7bed9f; }
         .log .p2 { color: #ff6b81; }
         .log .sys { color: #feca57; font-style: italic; }
         
         .room-code-display { font-size: 32px; letter-spacing: 5px; color: #7bed9f; font-family: monospace; background: #222; padding: 10px; border-radius: 8px; display: inline-block; margin: 10px 0; }
-        .hand-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .hand-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; }
 
         /* Modal Styles */
         .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 1000; display: none; justify-content: center; align-items: center; }
-        .modal-content { background: var(--panel-bg); padding: 30px; border-radius: 10px; max-width: 700px; text-align: center; border: 2px solid #555; }
+        .modal-content { background: var(--panel-bg); padding: 30px; border-radius: 10px; max-width: 800px; text-align: center; border: 2px solid #555; max-height: 90vh; overflow-y: auto; }
         .selectable-card { cursor: pointer; border: 2px solid transparent !important; }
         .selectable-card.selected { border-color: #7bed9f !important; transform: translateY(-10px) !important; box-shadow: 0 0 15px #7bed9f; }
     </style>
@@ -62,11 +62,10 @@
 <body>
 
     <div class="game-container">
-        
         <!-- MENU -->
         <div id="menu-screen" class="screen active" style="text-align:center; padding: 50px;">
-            <h1 style="font-size: 48px;">Kingdom Builder</h1>
-            <p>A deck-building duel of money and prestige.</p>
+            <h1 style="font-size: 48px;">Kingdom Builder: <span style="color:#e74c3c;">OVERPOWERED</span></h1>
+            <p>Broken combos, massive numbers, pure chaos.</p>
             <br><br>
             <button onclick="createRoom()">Create New Game</button>
             <hr style="border-color: #333; margin: 30px 0;">
@@ -125,7 +124,7 @@
             <div class="hand-header">
                 <h3 style="margin: 0;">Your Hand</h3>
                 <div>
-                    <button id="play-money-btn" style="display: none; background: #f1c40f; color: #000;" onclick="playAllMoney()">💰 Play All Money</button>
+                    <button id="play-money-btn" style="display: none; background: #f1c40f; color: #000;" onclick="playAllMoney()">💰 Cash In Money</button>
                     <button id="phase-btn" style="display: none;" onclick="nextPhase()"></button>
                 </div>
             </div>
@@ -161,25 +160,36 @@
         let pendingCardIndex = null;
         let selectedIndices = [];
 
-        // Client-side Card Dictionary
+        // Full insane dictionary mapping
         const cards = {
-            'barony': { name: 'Barony', type: 'nation', cost: 4, icon: '🏰', desc: '+2 Cards, +1 Action. (Buying has 50% chance to yield Corrupted Barony)', color: 'var(--nation-color)' },
-            'corrupted_barony': { name: 'Corrupted Barony', type: 'nation', cost: 4, icon: '🏚️', desc: '+2 Cards, +1 Action. -1 Prestige.', color: '#8e44ad' },
-            'county': { name: 'County', type: 'nation', cost: 5, icon: '🏘️', desc: '+2 Cards, +1 Act. 50% chance for +1 Card, else +1 Act.', color: 'var(--nation-color)' },
-            'city': { name: 'City', type: 'nation', cost: 6, icon: '🏙️', desc: '+1 Card, +1 Action, +2 Money', color: 'var(--nation-color)' },
-            'army': { name: 'Army', type: 'nation', cost: 6, icon: '⚔️', desc: 'Steal 1 random Nation Card from opponent.', color: '#2c3e50' },
-            'raid': { name: 'Raid', type: 'nation', cost: 5, icon: '🔥', desc: 'Opponent discards 1 random card. +2 Money.', color: '#c0392b' },
-            'capital': { name: 'Capital', type: 'nation', cost: 10, icon: '🏛️', desc: '+2 Cards, +2 Acts, +2 Money, +1 Buy. 2 Prestige.', color: '#f39c12' },
-            'lieutenant': { name: 'Lieutenant', type: 'nation', cost: 2, icon: '🎖️', desc: 'Discard selected cards, draw that many. +1 Action.', color: '#34495e' },
-            'corporal_punishment': { name: 'Corp. Punishment', type: 'nation', cost: 6, icon: '⛓️', desc: 'Trash selected cards. +1 Action, +1 Card.', color: '#7f8c8d' },
+            'god_barony': { name: "God's Barony", type: 'nation', cost: 10, icon: '🏰', desc: '+5 Cards, +5 Acts. (90% chance to yield Cursed Wasteland)', color: 'var(--nation-color)' },
+            'cursed_wasteland': { name: 'Cursed Wasteland', type: 'nation', cost: 5, icon: '🏚️', desc: '+10 Cards, -10 Prestige. The greed consumes you.', color: '#8e44ad' },
+            'quantum_county': { name: 'Quantum County', type: 'nation', cost: 15, icon: '🏘️', desc: '+3 Cards, +3 Acts. 50% chance for +5 Cards, else +5 Acts.', color: 'var(--nation-color)' },
+            'megalopolis': { name: 'Megalopolis', type: 'nation', cost: 20, icon: '🏙️', desc: '+5 Cards, +5 Actions, +15 Money', color: 'var(--nation-color)' },
+            'galactic_armada': { name: 'Galactic Armada', type: 'nation', cost: 18, icon: '🛸', desc: 'Steal 3 random Nation Cards from opponent.', color: '#2c3e50' },
+            'orbital_strike': { name: 'Orbital Strike', type: 'nation', cost: 15, icon: '💥', desc: 'Opp discards entire hand, draws 3. +20 Money.', color: '#c0392b' },
+            'universe_core': { name: 'Universe Core', type: 'nation', cost: 35, icon: '🌌', desc: '+10 Cards, +10 Acts, +30 Money, +5 Buys. 10 Prestige.', color: '#f39c12' },
+            'supreme_commander': { name: 'Supreme Cmdr.', type: 'nation', cost: 12, icon: '🎖️', desc: 'Discard selected cards, draw DOUBLE. +5 Acts.', color: '#34495e' },
+            'guillotine': { name: 'Guillotine', type: 'nation', cost: 15, icon: '🪓', desc: 'Trash selected cards. For each: +3 Acts, +3 Cards.', color: '#7f8c8d' },
 
-            'coin': { name: 'Coin', type: 'money', cost: 0, icon: '🪙', desc: '+1 Money', color: 'var(--money-color)' },
-            'banknote': { name: 'Bank Note', type: 'money', cost: 3, icon: '💵', desc: '+2 Money', color: 'var(--money-color)' },
-            'emerald': { name: 'Emerald', type: 'money', cost: 6, icon: '💎', desc: '+3 Money', color: '#1abc9c' },
+            'time_machine': { name: 'Time Machine', type: 'nation', cost: 25, icon: '⏳', desc: '+10 Acts. Move your entire discard pile into your hand.', color: '#9b59b6' },
+            'tax_fraud': { name: 'Tax Fraud', type: 'nation', cost: 5, icon: '💼', desc: '+60 Money. -15 Prestige. The IRS is watching.', color: '#e74c3c' },
+            'clone_vat': { name: 'Clone Vat', type: 'nation', cost: 30, icon: '🧬', desc: '+1 Act. Gain 3 copies of The Universe Core.', color: '#2ecc71' },
+            'black_hole': { name: 'Black Hole', type: 'nation', cost: 22, icon: '🕳️', desc: 'Trash your hand. Opponent trashes hand. +100 Money.', color: '#000000' },
+            'propaganda': { name: 'Propaganda', type: 'nation', cost: 12, icon: '📢', desc: '30 Prestige. Opponent draws 5 cards. +1 Act.', color: '#3498db' },
+            'lootbox': { name: 'Lootbox', type: 'nation', cost: 2, icon: '🎰', desc: '+1 Act. 10% chance for Holy Grail. 90% for 3 Curses.', color: '#f1c40f' },
+            'philanthropist': { name: 'Philanthropist', type: 'nation', cost: 0, icon: '🤝', desc: 'Opponent gains 20 Money. You get +5 Cards/Acts/Buys.', color: '#1abc9c' },
+            'cult_leader': { name: 'Cult Leader', type: 'nation', cost: 18, icon: '🐑', desc: '+1 Card/Act. Gain +2 Money for EVERY card in discard pile.', color: '#d35400' },
+
+            'bitcoin': { name: 'Bitcoin', type: 'money', cost: 0, icon: '₿', desc: '+5 Money', color: 'var(--money-color)' },
+            'blank_check': { name: 'Blank Check', type: 'money', cost: 10, icon: '🧾', desc: '+20 Money', color: 'var(--money-color)' },
+            'infinity_stone': { name: 'Infinity Stone', type: 'money', cost: 30, icon: '💎', desc: '+100 Money', color: '#1abc9c' },
+            'printer_go_brrr': { name: 'Printer Go Brrr', type: 'money', cost: 50, icon: '🖨️', desc: '+250 Money, +10 Buys.', color: '#2ecc71' },
             
-            'knight': { name: 'Knight', type: 'prestige', cost: 4, icon: '🛡️', desc: '2 Prestige', color: 'var(--prestige-color)' },
-            'chevalier': { name: 'Chevalier', type: 'prestige', cost: 6, icon: '🗡️', desc: '4 Prestige', color: 'var(--prestige-color)' },
-            'marshal': { name: 'Marshal', type: 'prestige', cost: 8, icon: '🐎', desc: '6 Prestige', color: '#f1c40f' }
+            'jedi_knight': { name: 'Jedi Knight', type: 'prestige', cost: 15, icon: '⚔️', desc: '20 Prestige', color: 'var(--prestige-color)' },
+            'dragon_rider': { name: 'Dragon Rider', type: 'prestige', cost: 30, icon: '🐉', desc: '60 Prestige', color: 'var(--prestige-color)' },
+            'deity': { name: 'Deity', type: 'prestige', cost: 50, icon: '👁️', desc: '150 Prestige', color: 'var(--prestige-color)' },
+            'holy_grail': { name: 'Holy Grail', type: 'prestige', cost: 150, icon: '🏆', desc: '1000 Prestige. Instant Win.', color: '#f1c40f' }
         };
 
         function showScreen(id) {
@@ -195,7 +205,7 @@
         
         function playCard(index) { 
             const cardId = currentGameState.me.hand[index];
-            if (cardId === 'lieutenant' || cardId === 'corporal_punishment') {
+            if (cardId === 'supreme_commander' || cardId === 'guillotine') {
                 openModal(index, cardId);
             } else {
                 socket.emit('play_card', { roomId: currentRoom, cardIndex: index }); 
@@ -206,31 +216,26 @@
         function nextPhase() { socket.emit('next_phase', currentRoom); }
         function playAllMoney() { socket.emit('play_all_money', currentRoom); }
 
-        // --- Modal Functions ---
         function openModal(cardIndex, cardId) {
             pendingCardIndex = cardIndex;
             selectedIndices = [];
             const myHand = currentGameState.me.hand;
             
-            document.getElementById('modal-title').innerText = cardId === 'lieutenant' ? "Discard Cards" : "Trash Cards";
-            document.getElementById('modal-desc').innerText = cardId === 'lieutenant' 
-                ? "Select cards to discard. You will draw a new card for each one." 
-                : "Select cards to permanently trash.";
+            document.getElementById('modal-title').innerText = cardId === 'supreme_commander' ? "Discard for Power" : "Execute Cards";
+            document.getElementById('modal-desc').innerText = cardId === 'supreme_commander' 
+                ? "Select cards to discard. You will draw DOUBLE that many cards." 
+                : "Select cards to permanently TRASH. You will gain +3 Acts and +3 Cards for each.";
 
             const modalHand = document.getElementById('modal-hand');
             modalHand.innerHTML = '';
 
             myHand.forEach((cId, idx) => {
-                if (idx === cardIndex) return; // Don't show the card currently being played
+                if (idx === cardIndex) return;
                 const card = cards[cId];
                 const cardEl = document.createElement('div');
                 cardEl.className = 'card selectable-card';
                 cardEl.style.borderTopColor = card.color;
-                cardEl.innerHTML = `
-                    <div class="card-icon">${card.icon}</div>
-                    <div class="card-title">${card.name}</div>
-                    <div class="card-type">${card.type.toUpperCase()}</div>
-                `;
+                cardEl.innerHTML = `<div class="card-icon">${card.icon}</div><div class="card-title">${card.name}</div><div class="card-type">${card.type.toUpperCase()}</div>`;
                 cardEl.onclick = () => {
                     if (selectedIndices.includes(idx)) {
                         selectedIndices = selectedIndices.filter(i => i !== idx);
@@ -252,15 +257,10 @@
         }
 
         function confirmModal() {
-            socket.emit('play_complex_card', { 
-                roomId: currentRoom, 
-                cardIndex: pendingCardIndex, 
-                selectedIndices: selectedIndices 
-            });
+            socket.emit('play_complex_card', { roomId: currentRoom, cardIndex: pendingCardIndex, selectedIndices: selectedIndices });
             closeModal();
         }
 
-        // --- Socket Listeners ---
         socket.on('room_created', (roomId) => {
             currentRoom = roomId;
             document.getElementById('display-room-code').innerText = roomId;
@@ -321,12 +321,18 @@
                 document.getElementById('play-money-btn').style.display = 'none';
             }
 
-            // Supply Area with Tooltips
+            // Supply Area Dynamic Sorting
             const supplyDiv = document.getElementById('supply-area');
             supplyDiv.innerHTML = '';
             
-            // Define display order to keep cards grouped by type logically
-            const displayOrder = ['coin', 'banknote', 'emerald', 'knight', 'chevalier', 'marshal', 'barony', 'county', 'city', 'army', 'raid', 'capital', 'lieutenant', 'corporal_punishment'];
+            // Sort logic: Money first, then Prestige, then Nations. Secondary sort by cost.
+            const displayOrder = Object.keys(cards).sort((a, b) => {
+                const typeWeight = { money: 1, prestige: 2, nation: 3 };
+                if (typeWeight[cards[a].type] !== typeWeight[cards[b].type]) {
+                    return typeWeight[cards[a].type] - typeWeight[cards[b].type];
+                }
+                return cards[a].cost - cards[b].cost;
+            });
             
             displayOrder.forEach(cardId => {
                 if (state.supply[cardId] !== undefined) {
@@ -336,15 +342,15 @@
                     
                     const cardEl = document.createElement('div');
                     cardEl.className = `card ${!canBuy ? 'disabled' : ''}`;
-                    cardEl.style.width = '75px';
-                    cardEl.style.padding = '8px';
+                    cardEl.style.width = '65px';
+                    cardEl.style.padding = '6px';
                     cardEl.style.borderTopColor = card.color;
                     
                     cardEl.innerHTML = `
                         <div class="card-cost">${card.cost}</div>
                         <div class="pile-count">${count}</div>
-                        <div class="card-icon" style="font-size:18px;">${card.icon}</div>
-                        <div class="card-title" style="font-size:11px;">${card.name}</div>
+                        <div class="card-icon" style="font-size:16px;">${card.icon}</div>
+                        <div class="card-title" style="font-size:9px;">${card.name}</div>
                         <div class="card-type">${card.type.toUpperCase()}</div>
                         <div class="tooltip">${card.desc}</div>
                     `;
@@ -360,7 +366,7 @@
                 const el = document.createElement('div');
                 el.className = 'mini-card';
                 el.style.borderTopColor = cards[cardId].color;
-                el.innerHTML = `<div>${cards[cardId].icon}</div><div>${cards[cardId].name}</div>`;
+                el.innerHTML = `<div>${cards[cardId].icon}</div><div style="font-size:8px;">${cards[cardId].name}</div>`;
                 myPlayedDiv.appendChild(el);
             });
 
@@ -370,7 +376,7 @@
                 const el = document.createElement('div');
                 el.className = 'mini-card';
                 el.style.borderTopColor = cards[cardId].color;
-                el.innerHTML = `<div>${cards[cardId].icon}</div><div>${cards[cardId].name}</div>`;
+                el.innerHTML = `<div>${cards[cardId].icon}</div><div style="font-size:8px;">${cards[cardId].name}</div>`;
                 oppPlayedDiv.appendChild(el);
             });
 
@@ -399,8 +405,8 @@
                         <div class="card-cost">${card.cost}</div>
                         <div class="card-icon">${card.icon}</div>
                         <div class="card-title">${card.name}</div>
-                        <div class="card-desc">${card.desc}</div>
                         <div class="card-type">${card.type.toUpperCase()}</div>
+                        <div class="tooltip">${card.desc}</div>
                     `;
                     
                     if(canPlay) cardEl.onclick = () => playCard(index);
