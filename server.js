@@ -9,7 +9,6 @@ const io = new Server(server);
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Deck Builder Mechanics
 function shuffle(array) {
     for (let i = array.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
@@ -22,7 +21,7 @@ function drawCards(player, count, room) {
     let drawn = 0;
     for (let i = 0; i < count; i++) {
         if (player.deck.length === 0) {
-            if (player.discard.length === 0) break; // No cards left anywhere
+            if (player.discard.length === 0) break;
             player.deck = shuffle([...player.discard]);
             player.discard = [];
             logAction(`♻️ ${player.name} shuffled their discard pile into their deck.`, room, player.id);
@@ -62,37 +61,62 @@ function checkGameOver(room) {
 // Card Database
 const cards = {
     // Nation Cards (Action Phase)
-    'barony': { id: 'barony', name: 'Barony', type: 'nation', cost: 2, desc: '+2 Cards, +1 Action', action: (p, room) => { p.actions += 1; drawCards(p, 2, room); } },
-    'county': { id: 'county', name: 'County', type: 'nation', cost: 4, desc: '+2 Cards, +1 Action. 50% +1 Card, else +1 Action.', action: (p, room) => { 
+    'barony': { id: 'barony', name: 'Barony', type: 'nation', cost: 4, desc: '+2 Cards, +1 Action. (Buying has 50% chance to yield Corrupted Barony)', action: (p, room) => { p.actions += 1; drawCards(p, 2, room); } },
+    'corrupted_barony': { id: 'corrupted_barony', name: 'Corrupted Barony', type: 'nation', cost: 4, prestige: -1, desc: '+2 Cards, +1 Action. -1 Prestige.', action: (p, room) => { p.actions += 1; drawCards(p, 2, room); } },
+    'county': { id: 'county', name: 'County', type: 'nation', cost: 5, desc: '+2 Cards, +1 Act. 50% chance for +1 Card, else +1 Act.', action: (p, room) => { 
         p.actions += 1; 
         drawCards(p, 2, room); 
         if(Math.random() < 0.5) { drawCards(p, 1, room); logAction(`🎲 County granted +1 extra Card!`, room, p.id); } 
         else { p.actions += 1; logAction(`🎲 County granted +1 extra Action!`, room, p.id); } 
     }},
-    'city': { id: 'city', name: 'City', type: 'nation', cost: 6, desc: '+1 Card, +2 Money', action: (p, room) => { drawCards(p, 1, room); p.money += 2; } },
-    
+    'city': { id: 'city', name: 'City', type: 'nation', cost: 6, desc: '+1 Card, +1 Action, +2 Money', action: (p, room) => { p.actions += 1; drawCards(p, 1, room); p.money += 2; } },
+    'army': { id: 'army', name: 'Army', type: 'nation', cost: 6, desc: 'Steal 1 random Nation Card from opponent.', action: (p, room) => { 
+        const target = p.id === room.p1.id ? room.p2 : room.p1;
+        const allOppCards = [...target.deck, ...target.hand, ...target.discard, ...target.played];
+        const nationCards = allOppCards.filter(c => cards[c].type === 'nation');
+        if (nationCards.length > 0) {
+            const stolenId = nationCards[Math.floor(Math.random() * nationCards.length)];
+            const removeCard = (arr, id) => { const idx = arr.indexOf(id); if(idx !== -1) { arr.splice(idx, 1); return true; } return false; };
+            if (!removeCard(target.hand, stolenId)) if (!removeCard(target.deck, stolenId)) if (!removeCard(target.discard, stolenId)) removeCard(target.played, stolenId);
+            p.discard.push(stolenId);
+            logAction(`⚔️ ${p.name} stole a ${cards[stolenId].name} from ${target.name}!`, room, p.id);
+        } else {
+            logAction(`⚔️ ${p.name} tried to steal, but opponent had no Nation cards!`, room, p.id);
+        }
+    }},
+    'raid': { id: 'raid', name: 'Raid', type: 'nation', cost: 5, desc: 'Opponent discards 1 random card. +2 Money.', action: (p, room) => { 
+        p.money += 2;
+        const target = p.id === room.p1.id ? room.p2 : room.p1;
+        if(target.hand.length > 0) {
+            const dropIdx = Math.floor(Math.random() * target.hand.length);
+            target.discard.push(target.hand.splice(dropIdx, 1)[0]);
+            logAction(`🔥 Raid! ${target.name} discarded a random card.`, room, p.id);
+        }
+    }},
+    'capital': { id: 'capital', name: 'Capital', type: 'nation', cost: 10, prestige: 2, desc: '+2 Cards, +2 Acts, +2 Money, +1 Buy. 2 Prestige.', action: (p, room) => { p.actions += 2; p.money += 2; p.buys += 1; drawCards(p, 2, room); } },
+    'lieutenant': { id: 'lieutenant', name: 'Lieutenant', type: 'nation', cost: 2, desc: 'Discard selected cards, draw that many. +1 Action.', action: (p, room) => {} }, // Handled specially
+    'corporal_punishment': { id: 'corporal_punishment', name: 'Corp. Punishment', type: 'nation', cost: 6, desc: 'Trash selected cards. +1 Action, +1 Card.', action: (p, room) => {} }, // Handled specially
+
     // Money Cards (Buy Phase)
-    'coin': { id: 'coin', name: 'Coin', type: 'money', cost: 3, desc: '+1 Money', action: (p, room) => { p.money += 1; } },
-    'banknote': { id: 'banknote', name: 'Bank Note', type: 'money', cost: 6, desc: '+2 Money', action: (p, room) => { p.money += 2; } },
+    'coin': { id: 'coin', name: 'Coin', type: 'money', cost: 0, desc: '+1 Money', action: (p, room) => { p.money += 1; } },
+    'banknote': { id: 'banknote', name: 'Bank Note', type: 'money', cost: 3, desc: '+2 Money', action: (p, room) => { p.money += 2; } },
+    'emerald': { id: 'emerald', name: 'Emerald', type: 'money', cost: 6, desc: '+3 Money', action: (p, room) => { p.money += 3; } },
     
     // Prestige Cards (Victory Points)
-    'knight': { id: 'knight', name: 'Knight', type: 'prestige', cost: 2, prestige: 2, desc: '2 Prestige Points', action: (p, room) => {} },
-    'chevalier': { id: 'chevalier', name: 'Chevalier', type: 'prestige', cost: 4, prestige: 4, desc: '4 Prestige Points', action: (p, room) => {} }
+    'knight': { id: 'knight', name: 'Knight', type: 'prestige', cost: 4, prestige: 2, desc: '2 Prestige Points', action: (p, room) => {} },
+    'chevalier': { id: 'chevalier', name: 'Chevalier', type: 'prestige', cost: 6, prestige: 4, desc: '4 Prestige Points', action: (p, room) => {} },
+    'marshal': { id: 'marshal', name: 'Marshal', type: 'prestige', cost: 8, prestige: 6, desc: '6 Prestige Points', action: (p, room) => {} }
 };
 
-const initialSupply = { barony: 5, county: 5, city: 5, coin: 5, banknote: 5, knight: 5, chevalier: 5 };
+const initialSupply = { barony: 10, county: 10, city: 10, army: 10, raid: 10, capital: 10, lieutenant: 10, corporal_punishment: 10, coin: 40, banknote: 40, emerald: 40, knight: 8, chevalier: 8, marshal: 8 };
 const rooms = {}; 
 
 function createPlayer(id, name) {
     return {
         id, name,
-        deck: shuffle(['knight', 'knight', 'coin', 'coin', 'coin']),
-        hand: [],
-        discard: [],
-        played: [],
-        actions: 1,
-        money: 0,
-        buys: 1
+        deck: shuffle(['knight', 'knight', 'knight', 'coin', 'coin', 'coin', 'coin', 'coin', 'coin', 'coin']),
+        hand: [], discard: [], played: [],
+        actions: 1, money: 0, buys: 1
     };
 }
 
@@ -105,16 +129,14 @@ function broadcastState(roomId) {
 
     if (room.p1.id) {
         io.to(room.p1.id).emit('game_state', {
-            id: room.id, turn: room.turn, phase: room.phase, supply: room.supply, logs: room.logs, gameOver: room.gameOver, winner: room.winner,
-            myKey: 'p1',
+            id: room.id, turn: room.turn, phase: room.phase, supply: room.supply, logs: room.logs, gameOver: room.gameOver, winner: room.winner, myKey: 'p1',
             me: p1State,
             opponent: p2State ? { name: p2State.name, deckCount: p2State.deckCount, discardCount: p2State.discardCount, handCount: p2State.hand.length, played: p2State.played, prestige: p2State.prestige } : null
         });
     }
     if (room.p2 && room.p2.id) {
         io.to(room.p2.id).emit('game_state', {
-            id: room.id, turn: room.turn, phase: room.phase, supply: room.supply, logs: room.logs, gameOver: room.gameOver, winner: room.winner,
-            myKey: 'p2',
+            id: room.id, turn: room.turn, phase: room.phase, supply: room.supply, logs: room.logs, gameOver: room.gameOver, winner: room.winner, myKey: 'p2',
             me: p2State,
             opponent: { name: p1State.name, deckCount: p1State.deckCount, discardCount: p1State.discardCount, handCount: p1State.hand.length, played: p1State.played, prestige: p1State.prestige }
         });
@@ -125,17 +147,7 @@ io.on('connection', (socket) => {
     
     socket.on('create_room', () => {
         const roomId = Math.random().toString(36).substring(2, 8).toUpperCase();
-        rooms[roomId] = {
-            id: roomId,
-            p1: createPlayer(socket.id, "Player 1"),
-            p2: null,
-            turn: 'p1',
-            phase: 'action',
-            supply: { ...initialSupply },
-            logs: [{ text: "Room created. Waiting for opponent...", actor: "sys" }],
-            gameOver: false,
-            winner: null
-        };
+        rooms[roomId] = { id: roomId, p1: createPlayer(socket.id, "Player 1"), p2: null, turn: 'p1', phase: 'action', supply: { ...initialSupply }, logs: [{ text: "Room created. Waiting for opponent...", actor: "sys" }], gameOver: false, winner: null };
         drawCards(rooms[roomId].p1, 5, rooms[roomId]);
         socket.join(roomId);
         socket.emit('room_created', roomId);
@@ -170,38 +182,71 @@ io.on('connection', (socket) => {
         const cardId = actor.hand[cardIndex];
         const card = cards[cardId];
 
-        // Phase Logic
         if (room.phase === 'action') {
             if (card.type !== 'nation') return; 
             if (actor.actions <= 0) return;
             actor.actions -= 1;
         } else if (room.phase === 'buy') {
             if (card.type !== 'money') return; 
-        } else {
-            return;
-        }
+        } else return;
 
         actor.hand.splice(cardIndex, 1);
         actor.played.push(cardId);
-        
         logAction(`👉 ${actor.name} played [${card.name}]`, room, actorKey);
         card.action(actor, room);
+        broadcastState(roomId);
+    });
+    
+    socket.on('play_complex_card', (data) => {
+        const { roomId, cardIndex, selectedIndices } = data;
+        const room = rooms[roomId];
+        if (!room || room.gameOver) return;
+
+        const isP1 = room.p1.id === socket.id;
+        const actorKey = isP1 ? 'p1' : 'p2';
+        const actor = room[actorKey];
+
+        if (room.turn !== actorKey || room.phase !== 'action') return;
         
+        const cardId = actor.hand[cardIndex];
+        if(cards[cardId].type !== 'nation' || actor.actions <= 0) return;
+
+        actor.actions -= 1;
+        actor.hand.splice(cardIndex, 1);
+        actor.played.push(cardId);
+
+        let adjusted = selectedIndices.map(i => i > cardIndex ? i - 1 : i).sort((a, b) => b - a);
+        let removedCards = [];
+        
+        for(let i of adjusted) {
+            if(i >= 0 && i < actor.hand.length) {
+                removedCards.push(actor.hand.splice(i, 1)[0]);
+            }
+        }
+
+        if(cardId === 'lieutenant') {
+            actor.actions += 1;
+            actor.discard.push(...removedCards);
+            drawCards(actor, removedCards.length, room);
+            logAction(`👉 ${actor.name} played Lieutenant, discarded ${removedCards.length} cards and drew ${removedCards.length}.`, room, actorKey);
+        } else if(cardId === 'corporal_punishment') {
+            actor.actions += 1;
+            drawCards(actor, 1, room);
+            logAction(`👉 ${actor.name} played Corporal Punishment, trashed ${removedCards.length} cards. +1 Act, +1 Card.`, room, actorKey);
+        }
+
         broadcastState(roomId);
     });
     
     socket.on('play_all_money', (roomId) => {
         const room = rooms[roomId];
         if (!room || room.gameOver) return;
-        
         const isP1 = room.p1.id === socket.id;
         const actorKey = isP1 ? 'p1' : 'p2';
         const actor = room[actorKey];
-
         if (room.turn !== actorKey || room.phase !== 'buy') return;
         
         let moneyPlayed = 0;
-        // Loop backwards to splice correctly
         for (let i = actor.hand.length - 1; i >= 0; i--) {
             const cardId = actor.hand[i];
             if (cards[cardId].type === 'money') {
@@ -211,7 +256,6 @@ io.on('connection', (socket) => {
                 moneyPlayed++;
             }
         }
-        
         if (moneyPlayed > 0) {
             logAction(`💰 ${actor.name} played all their money cards.`, room, actorKey);
             broadcastState(roomId);
@@ -222,7 +266,6 @@ io.on('connection', (socket) => {
         const { roomId, cardId } = data;
         const room = rooms[roomId];
         if (!room || room.gameOver) return;
-
         const isP1 = room.p1.id === socket.id;
         const actorKey = isP1 ? 'p1' : 'p2';
         const actor = room[actorKey];
@@ -233,13 +276,18 @@ io.on('connection', (socket) => {
         const card = cards[cardId];
         if (room.supply[cardId] <= 0 || actor.money < card.cost) return;
         
-        // Purchase
         actor.money -= card.cost;
         actor.buys -= 1;
         room.supply[cardId] -= 1;
-        actor.discard.push(cardId);
         
-        logAction(`🛒 ${actor.name} bought a [${card.name}]!`, room, actorKey);
+        if (cardId === 'barony' && Math.random() < 0.5) {
+            actor.discard.push('corrupted_barony');
+            logAction(`🛒 ${actor.name} tried to buy Barony, but got a [Corrupted Barony]!`, room, actorKey);
+        } else {
+            actor.discard.push(cardId);
+            logAction(`🛒 ${actor.name} bought a [${card.name}]!`, room, actorKey);
+        }
+        
         checkGameOver(room);
         broadcastState(roomId);
     });
@@ -247,7 +295,6 @@ io.on('connection', (socket) => {
     socket.on('next_phase', (roomId) => {
         const room = rooms[roomId];
         if (!room || room.gameOver) return;
-
         const isP1 = room.p1.id === socket.id;
         const actorKey = isP1 ? 'p1' : 'p2';
         const targetKey = isP1 ? 'p2' : 'p1';
@@ -259,7 +306,6 @@ io.on('connection', (socket) => {
             room.phase = 'buy';
             logAction(`⏩ ${actor.name} entered the Buy Phase.`, room, actorKey);
         } else {
-            // End Turn: Cleanup
             actor.discard.push(...actor.hand, ...actor.played);
             actor.hand = [];
             actor.played = [];
@@ -273,7 +319,6 @@ io.on('connection', (socket) => {
             room.phase = 'action';
             logAction(`🛑 ${actor.name} ended their turn.`, room, actorKey);
         }
-        
         broadcastState(roomId);
     });
 
@@ -289,6 +334,4 @@ io.on('connection', (socket) => {
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-    console.log(`Deckbuilder server running on http://localhost:${PORT}`);
-});
+server.listen(PORT, () => { console.log(`Kingdom Builder server running on http://localhost:${PORT}`); });

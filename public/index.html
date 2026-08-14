@@ -7,7 +7,7 @@
     <style>
         :root { --bg-color: #0f0f1b; --panel-bg: #1a1a2e; --text-light: #f1f2f6; --nation-color: #9b59b6; --money-color: #f1c40f; --prestige-color: #2ecc71; --ui-bg: #2f3542; }
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: var(--bg-color); color: var(--text-light); margin: 0; padding: 20px; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
-        .game-container { background-color: var(--panel-bg); border-radius: 15px; padding: 20px; width: 100%; max-width: 900px; box-shadow: 0 10px 40px rgba(0,0,0,0.7); display: flex; flex-direction: column; position: relative; }
+        .game-container { background-color: var(--panel-bg); border-radius: 15px; padding: 20px; width: 100%; max-width: 950px; box-shadow: 0 10px 40px rgba(0,0,0,0.7); display: flex; flex-direction: column; position: relative; }
         h1 { color: #f1c40f; margin-top: 0; text-align: center; }
         .screen { display: none; }
         .screen.active { display: block; }
@@ -39,6 +39,10 @@
         .card-cost { position: absolute; top: -8px; left: -8px; background: #34495e; color: white; border-radius: 50%; width: 22px; height: 22px; font-weight: bold; display: flex; justify-content: center; align-items: center; font-size: 12px; border: 1px solid #fff; z-index: 5; }
         .pile-count { position: absolute; top: -8px; right: -8px; background: #e74c3c; color: white; border-radius: 50%; width: 22px; height: 22px; font-weight: bold; display: flex; justify-content: center; align-items: center; font-size: 12px; border: 1px solid #fff; z-index: 5;}
         
+        /* Tooltip implementation */
+        .tooltip { position: absolute; bottom: 105%; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.95); color: #fff; padding: 10px; border-radius: 6px; font-size: 11px; width: 160px; text-align: center; display: none; z-index: 100; pointer-events: none; border: 1px solid #777; box-shadow: 0 4px 10px rgba(0,0,0,0.8); }
+        .card:hover .tooltip { display: block; }
+        
         .log { background-color: rgba(0, 0, 0, 0.4); height: 100px; overflow-y: auto; border-radius: 8px; padding: 10px; margin-bottom: 15px; font-size: 13px; display: flex; flex-direction: column; border: 1px solid #444; }
         .log p { margin: 2px 0; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 2px; }
         .log .p1 { color: #7bed9f; }
@@ -47,6 +51,12 @@
         
         .room-code-display { font-size: 32px; letter-spacing: 5px; color: #7bed9f; font-family: monospace; background: #222; padding: 10px; border-radius: 8px; display: inline-block; margin: 10px 0; }
         .hand-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+
+        /* Modal Styles */
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 1000; display: none; justify-content: center; align-items: center; }
+        .modal-content { background: var(--panel-bg); padding: 30px; border-radius: 10px; max-width: 700px; text-align: center; border: 2px solid #555; }
+        .selectable-card { cursor: pointer; border: 2px solid transparent !important; }
+        .selectable-card.selected { border-color: #7bed9f !important; transform: translateY(-10px) !important; box-shadow: 0 0 15px #7bed9f; }
     </style>
 </head>
 <body>
@@ -77,7 +87,7 @@
         <div id="game-screen" class="screen">
             <h2 id="turn-indicator" style="text-align: center; margin-top: 0; color: #7bed9f;">Waiting for turn...</h2>
             
-            <h4 style="text-align:center; margin: 0 0 5px 0; color:#aaa;">The Supply (Click to Buy in Buy Phase)</h4>
+            <h4 style="text-align:center; margin: 0 0 5px 0; color:#aaa;">The Supply (Hover for Info, Click to Buy in Buy Phase)</h4>
             <div class="supply-container" id="supply-area"></div>
             
             <div class="arena">
@@ -128,21 +138,48 @@
         </div>
     </div>
 
+    <!-- SELECTION MODAL -->
+    <div id="selection-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h2 id="modal-title">Select Cards</h2>
+            <p style="color: #aaa; margin-bottom: 20px;" id="modal-desc">Click cards in your hand to select them, then click Confirm.</p>
+            <div class="hand" id="modal-hand"></div>
+            <br><br>
+            <button style="background: #e74c3c;" onclick="closeModal()">Cancel</button>
+            <button style="background: #2ecc71;" onclick="confirmModal()">Confirm Selection</button>
+        </div>
+    </div>
+
     <script src="/socket.io/socket.io.js"></script>
     <script>
         const socket = io();
         let currentRoom = null;
         let myKey = null; 
+        let currentGameState = null;
 
-        // Client-side Card Dictionary (For rendering UI)
+        // Modal State
+        let pendingCardIndex = null;
+        let selectedIndices = [];
+
+        // Client-side Card Dictionary
         const cards = {
-            'barony': { name: 'Barony', type: 'nation', cost: 2, icon: '🏰', desc: '+2 Cards, +1 Action', color: 'var(--nation-color)' },
-            'county': { name: 'County', type: 'nation', cost: 4, icon: '🏘️', desc: '+2 Cards, +1 Act. 50% +1 Card/Act.', color: 'var(--nation-color)' },
-            'city': { name: 'City', type: 'nation', cost: 6, icon: '🏙️', desc: '+1 Card, +2 Money', color: 'var(--nation-color)' },
-            'coin': { name: 'Coin', type: 'money', cost: 3, icon: '🪙', desc: '+1 Money', color: 'var(--money-color)' },
-            'banknote': { name: 'Bank Note', type: 'money', cost: 6, icon: '💵', desc: '+2 Money', color: 'var(--money-color)' },
-            'knight': { name: 'Knight', type: 'prestige', cost: 2, icon: '🛡️', desc: '2 Prestige', color: 'var(--prestige-color)' },
-            'chevalier': { name: 'Chevalier', type: 'prestige', cost: 4, icon: '⚔️', desc: '4 Prestige', color: 'var(--prestige-color)' }
+            'barony': { name: 'Barony', type: 'nation', cost: 4, icon: '🏰', desc: '+2 Cards, +1 Action. (Buying has 50% chance to yield Corrupted Barony)', color: 'var(--nation-color)' },
+            'corrupted_barony': { name: 'Corrupted Barony', type: 'nation', cost: 4, icon: '🏚️', desc: '+2 Cards, +1 Action. -1 Prestige.', color: '#8e44ad' },
+            'county': { name: 'County', type: 'nation', cost: 5, icon: '🏘️', desc: '+2 Cards, +1 Act. 50% chance for +1 Card, else +1 Act.', color: 'var(--nation-color)' },
+            'city': { name: 'City', type: 'nation', cost: 6, icon: '🏙️', desc: '+1 Card, +1 Action, +2 Money', color: 'var(--nation-color)' },
+            'army': { name: 'Army', type: 'nation', cost: 6, icon: '⚔️', desc: 'Steal 1 random Nation Card from opponent.', color: '#2c3e50' },
+            'raid': { name: 'Raid', type: 'nation', cost: 5, icon: '🔥', desc: 'Opponent discards 1 random card. +2 Money.', color: '#c0392b' },
+            'capital': { name: 'Capital', type: 'nation', cost: 10, icon: '🏛️', desc: '+2 Cards, +2 Acts, +2 Money, +1 Buy. 2 Prestige.', color: '#f39c12' },
+            'lieutenant': { name: 'Lieutenant', type: 'nation', cost: 2, icon: '🎖️', desc: 'Discard selected cards, draw that many. +1 Action.', color: '#34495e' },
+            'corporal_punishment': { name: 'Corp. Punishment', type: 'nation', cost: 6, icon: '⛓️', desc: 'Trash selected cards. +1 Action, +1 Card.', color: '#7f8c8d' },
+
+            'coin': { name: 'Coin', type: 'money', cost: 0, icon: '🪙', desc: '+1 Money', color: 'var(--money-color)' },
+            'banknote': { name: 'Bank Note', type: 'money', cost: 3, icon: '💵', desc: '+2 Money', color: 'var(--money-color)' },
+            'emerald': { name: 'Emerald', type: 'money', cost: 6, icon: '💎', desc: '+3 Money', color: '#1abc9c' },
+            
+            'knight': { name: 'Knight', type: 'prestige', cost: 4, icon: '🛡️', desc: '2 Prestige', color: 'var(--prestige-color)' },
+            'chevalier': { name: 'Chevalier', type: 'prestige', cost: 6, icon: '🗡️', desc: '4 Prestige', color: 'var(--prestige-color)' },
+            'marshal': { name: 'Marshal', type: 'prestige', cost: 8, icon: '🐎', desc: '6 Prestige', color: '#f1c40f' }
         };
 
         function showScreen(id) {
@@ -155,11 +192,75 @@
             const code = document.getElementById('join-code').value.trim();
             if(code.length > 0) socket.emit('join_room', code);
         }
-        function playCard(index) { socket.emit('play_card', { roomId: currentRoom, cardIndex: index }); }
+        
+        function playCard(index) { 
+            const cardId = currentGameState.me.hand[index];
+            if (cardId === 'lieutenant' || cardId === 'corporal_punishment') {
+                openModal(index, cardId);
+            } else {
+                socket.emit('play_card', { roomId: currentRoom, cardIndex: index }); 
+            }
+        }
+        
         function buyCard(cardId) { socket.emit('buy_card', { roomId: currentRoom, cardId: cardId }); }
         function nextPhase() { socket.emit('next_phase', currentRoom); }
         function playAllMoney() { socket.emit('play_all_money', currentRoom); }
 
+        // --- Modal Functions ---
+        function openModal(cardIndex, cardId) {
+            pendingCardIndex = cardIndex;
+            selectedIndices = [];
+            const myHand = currentGameState.me.hand;
+            
+            document.getElementById('modal-title').innerText = cardId === 'lieutenant' ? "Discard Cards" : "Trash Cards";
+            document.getElementById('modal-desc').innerText = cardId === 'lieutenant' 
+                ? "Select cards to discard. You will draw a new card for each one." 
+                : "Select cards to permanently trash.";
+
+            const modalHand = document.getElementById('modal-hand');
+            modalHand.innerHTML = '';
+
+            myHand.forEach((cId, idx) => {
+                if (idx === cardIndex) return; // Don't show the card currently being played
+                const card = cards[cId];
+                const cardEl = document.createElement('div');
+                cardEl.className = 'card selectable-card';
+                cardEl.style.borderTopColor = card.color;
+                cardEl.innerHTML = `
+                    <div class="card-icon">${card.icon}</div>
+                    <div class="card-title">${card.name}</div>
+                    <div class="card-type">${card.type.toUpperCase()}</div>
+                `;
+                cardEl.onclick = () => {
+                    if (selectedIndices.includes(idx)) {
+                        selectedIndices = selectedIndices.filter(i => i !== idx);
+                        cardEl.classList.remove('selected');
+                    } else {
+                        selectedIndices.push(idx);
+                        cardEl.classList.add('selected');
+                    }
+                };
+                modalHand.appendChild(cardEl);
+            });
+            document.getElementById('selection-modal').style.display = 'flex';
+        }
+
+        function closeModal() {
+            document.getElementById('selection-modal').style.display = 'none';
+            pendingCardIndex = null;
+            selectedIndices = [];
+        }
+
+        function confirmModal() {
+            socket.emit('play_complex_card', { 
+                roomId: currentRoom, 
+                cardIndex: pendingCardIndex, 
+                selectedIndices: selectedIndices 
+            });
+            closeModal();
+        }
+
+        // --- Socket Listeners ---
         socket.on('room_created', (roomId) => {
             currentRoom = roomId;
             document.getElementById('display-room-code').innerText = roomId;
@@ -180,6 +281,7 @@
 
         socket.on('game_state', (state) => {
             if(!state.opponent) return; 
+            currentGameState = state;
             showScreen('game');
             
             myKey = state.myKey;
@@ -192,7 +294,6 @@
             const myState = state.me;
             const oppState = state.opponent;
 
-            // Update My Stats
             document.getElementById('my-actions').innerText = myState.actions;
             document.getElementById('my-money').innerText = myState.money;
             document.getElementById('my-buys').innerText = myState.buys;
@@ -200,14 +301,12 @@
             document.getElementById('my-deck').innerText = myState.deckCount;
             document.getElementById('my-discard').innerText = myState.discardCount;
 
-            // Update Opp Stats
             document.getElementById('opp-name').innerText = oppState.name;
             document.getElementById('opp-prestige').innerText = oppState.prestige;
             document.getElementById('opp-deck').innerText = oppState.deckCount;
             document.getElementById('opp-discard').innerText = oppState.discardCount;
             document.getElementById('opp-hand-count').innerText = oppState.handCount;
 
-            // Update Buttons
             if (isMyTurn && !state.gameOver) {
                 document.getElementById('phase-btn').style.display = 'inline-block';
                 if (state.phase === 'action') {
@@ -222,56 +321,60 @@
                 document.getElementById('play-money-btn').style.display = 'none';
             }
 
-            // Render Supply
+            // Supply Area with Tooltips
             const supplyDiv = document.getElementById('supply-area');
             supplyDiv.innerHTML = '';
-            Object.keys(state.supply).forEach(cardId => {
-                const count = state.supply[cardId];
-                const card = cards[cardId];
-                const canBuy = isMyTurn && state.phase === 'buy' && myState.money >= card.cost && myState.buys > 0 && count > 0;
-                
-                const cardEl = document.createElement('div');
-                cardEl.className = `card ${!canBuy ? 'disabled' : ''}`;
-                cardEl.style.width = '80px';
-                cardEl.style.padding = '8px';
-                cardEl.style.borderTopColor = card.color;
-                
-                cardEl.innerHTML = `
-                    <div class="card-cost">${card.cost}</div>
-                    <div class="pile-count">${count}</div>
-                    <div class="card-icon" style="font-size:18px;">${card.icon}</div>
-                    <div class="card-title" style="font-size:11px;">${card.name}</div>
-                    <div class="card-type">${card.type.toUpperCase()}</div>
-                `;
-                if(canBuy) cardEl.onclick = () => buyCard(cardId);
-                supplyDiv.appendChild(cardEl);
+            
+            // Define display order to keep cards grouped by type logically
+            const displayOrder = ['coin', 'banknote', 'emerald', 'knight', 'chevalier', 'marshal', 'barony', 'county', 'city', 'army', 'raid', 'capital', 'lieutenant', 'corporal_punishment'];
+            
+            displayOrder.forEach(cardId => {
+                if (state.supply[cardId] !== undefined) {
+                    const count = state.supply[cardId];
+                    const card = cards[cardId];
+                    const canBuy = isMyTurn && state.phase === 'buy' && myState.money >= card.cost && myState.buys > 0 && count > 0;
+                    
+                    const cardEl = document.createElement('div');
+                    cardEl.className = `card ${!canBuy ? 'disabled' : ''}`;
+                    cardEl.style.width = '75px';
+                    cardEl.style.padding = '8px';
+                    cardEl.style.borderTopColor = card.color;
+                    
+                    cardEl.innerHTML = `
+                        <div class="card-cost">${card.cost}</div>
+                        <div class="pile-count">${count}</div>
+                        <div class="card-icon" style="font-size:18px;">${card.icon}</div>
+                        <div class="card-title" style="font-size:11px;">${card.name}</div>
+                        <div class="card-type">${card.type.toUpperCase()}</div>
+                        <div class="tooltip">${card.desc}</div>
+                    `;
+                    if(canBuy) cardEl.onclick = () => buyCard(cardId);
+                    supplyDiv.appendChild(cardEl);
+                }
             });
 
-            // Render Played Cards (Yours)
+            // Played Cards
             const myPlayedDiv = document.getElementById('my-played');
             myPlayedDiv.innerHTML = '';
             myState.played.forEach(cardId => {
-                const card = cards[cardId];
                 const el = document.createElement('div');
                 el.className = 'mini-card';
-                el.style.borderTopColor = card.color;
-                el.innerHTML = `<div>${card.icon}</div><div>${card.name}</div>`;
+                el.style.borderTopColor = cards[cardId].color;
+                el.innerHTML = `<div>${cards[cardId].icon}</div><div>${cards[cardId].name}</div>`;
                 myPlayedDiv.appendChild(el);
             });
 
-            // Render Played Cards (Opponent)
             const oppPlayedDiv = document.getElementById('opp-played');
             oppPlayedDiv.innerHTML = '';
             oppState.played.forEach(cardId => {
-                const card = cards[cardId];
                 const el = document.createElement('div');
                 el.className = 'mini-card';
-                el.style.borderTopColor = card.color;
-                el.innerHTML = `<div>${card.icon}</div><div>${card.name}</div>`;
+                el.style.borderTopColor = cards[cardId].color;
+                el.innerHTML = `<div>${cards[cardId].icon}</div><div>${cards[cardId].name}</div>`;
                 oppPlayedDiv.appendChild(el);
             });
 
-            // Render Hand
+            // Player Hand
             const handDiv = document.getElementById('player-hand');
             handDiv.innerHTML = '';
             
@@ -305,7 +408,7 @@
                 });
             }
 
-            // Render Logs
+            // Logs
             const logDiv = document.getElementById('battle-log');
             logDiv.innerHTML = '';
             state.logs.forEach(l => {
